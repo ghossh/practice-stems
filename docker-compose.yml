@@ -1,0 +1,13 @@
+services:
+  practice-stems:
+    build: .
+    container_name: practice-stems
+    ports:
+      - "7860:7860"
+    volumes:
+      # Keep songs / stems on your Mac across rebuilds
+      - ./data:/app/data
+    environment:
+      - HOST=0.0.0.0
+      - PORT=7860
+    restart: unless-stopped

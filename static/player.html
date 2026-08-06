@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Practice Player</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="player-top">
+      <button type="button" class="ghost" id="homeBtn">← Home</button>
+      <h1 id="title">Practice player</h1>
+      <div class="transport">
+        <button class="primary" id="playBtn" type="button">Play</button>
+        <button id="stopBtn" type="button">Stop</button>
+        <button id="resetBtn" type="button">Reset mix</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="seek-row">
+        <span class="time" id="tCur">0:00</span>
+        <input type="range" id="seek" min="0" max="1000" value="0" step="1" />
+        <span class="time" id="tDur">0:00</span>
+      </div>
+
+      <div class="presets" id="presets"></div>
+      <div class="stems" id="stems"></div>
+      <div class="footer-note" id="status">Loading stems…</div>
+    </div>
+  </div>
+
+  <script>
+    const BOOT = __BOOT_JSON__;
+
+    const STEM_ORDER = BOOT.stem_order || ["vocals", "drums", "bass", "guitar", "piano", "other"];
+    const PRESETS = [
+      { id: "all", label: "All on", mute: [] },
+      { id: "guitarist", label: "Guitarist", mute: ["guitar"] },
+      { id: "drummer", label: "Drummer", mute: ["drums"] },
+      { id: "singer", label: "Singer", mute: ["vocals"] },
+      { id: "bassist", label: "Bassist", mute: ["bass"] },
+      { id: "pianist", label: "Pianist", mute: ["piano"] },
+      { id: "karaoke", label: "Karaoke", mute: ["vocals"] },
+    ];
+
+    const tracks = {}; // name -> { audio, muted, solo, vol }
+    let playing = false;
+    let activePreset = "all";
+    let seeking = false;
+    let syncTimer = null;
+    let uiTimer = null;
+
+    const playBtn = document.getElementById("playBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const seekEl = document.getElementById("seek");
+    const tCur = document.getElementById("tCur");
+    const tDur = document.getElementById("tDur");
+    const statusEl = document.getElementById("status");
+
+    function fmt(sec) {
+      if (!isFinite(sec) || sec < 0) return "0:00";
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return m + ":" + String(s).padStart(2, "0");
+    }
+
+    function setStatus(msg) {
+      statusEl.textContent = msg || "";
+    }
+
+    function anySolo() {
+      return Object.values(tracks).some((t) => t.solo);
+    }
+
+    function applyAudibility() {
+      const soloing = anySolo();
+      for (const t of Object.values(tracks)) {
+        t.audio.muted = t.muted || (soloing && !t.solo);
+        t.audio.volume = Math.min(1, Math.max(0, t.vol));
+      }
+      refreshButtons();
+    }
+
+    function masterAudio() {
+      const names = STEM_ORDER.filter((n) => tracks[n]);
+      return names.length ? tracks[names[0]].audio : null;
+    }
+
+    function duration() {
+      const a = masterAudio();
+      return a && isFinite(a.duration) ? a.duration : 0;
+    }
+
+    function clearTimers() {
+      if (syncTimer) clearInterval(syncTimer);
+      if (uiTimer) clearInterval(uiTimer);
+      syncTimer = uiTimer = null;
+    }
+
+    function startTimers() {
+      clearTimers();
+      syncTimer = setInterval(() => {
+        const list = Object.values(tracks);
+        if (!list.length || !playing) return;
+        const master = list[0].audio;
+        for (let i = 1; i < list.length; i++) {
+          const a = list[i].audio;
+          if (Math.abs(a.currentTime - master.currentTime) > 0.08) {
+            a.currentTime = master.currentTime;
+          }
+        }
+      }, 400);
+      uiTimer = setInterval(updateSeekUI, 200);
+    }
+
+    function updateSeekUI() {
+      if (seeking) return;
+      const a = masterAudio();
+      if (!a) return;
+      const dur = duration();
+      tDur.textContent = fmt(dur);
+      tCur.textContent = fmt(a.currentTime || 0);
+      if (dur > 0) seekEl.value = String(Math.round((a.currentTime / dur) * 1000));
+    }
+
+    async function playAll() {
+      const list = Object.values(tracks);
+      if (!list.length) return;
+      applyAudibility();
+      try {
+        await Promise.all(list.map((t) => t.audio.play()));
+        playing = true;
+        playBtn.textContent = "Pause";
+        startTimers();
+        setStatus("Playing — drag faders to practice.");
+      } catch (e) {
+        playing = false;
+        playBtn.textContent = "Play";
+        setStatus("Play failed: " + e);
+      }
+    }
+
+    function pauseAll() {
+      for (const t of Object.values(tracks)) t.audio.pause();
+      playing = false;
+      playBtn.textContent = "Play";
+      clearTimers();
+      setStatus("Paused");
+    }
+
+    function stopAll() {
+      for (const t of Object.values(tracks)) {
+        t.audio.pause();
+        t.audio.currentTime = 0;
+      }
+      playing = false;
+      playBtn.textContent = "Play";
+      clearTimers();
+      updateSeekUI();
+      setStatus("Stopped");
+    }
+
+    function togglePlay() {
+      if (playing) pauseAll();
+      else playAll();
+    }
+
+    function seekToRatio(ratio) {
+      const dur = duration();
+      if (!(dur > 0)) return;
+      const t = Math.max(0, Math.min(dur, ratio * dur));
+      for (const tr of Object.values(tracks)) tr.audio.currentTime = t;
+      updateSeekUI();
+    }
+
+    function refreshButtons() {
+      for (const name of Object.keys(tracks)) {
+        const muteBtn = document.getElementById("mute-" + name);
+        const soloBtn = document.getElementById("solo-" + name);
+        if (muteBtn) muteBtn.classList.toggle("on", tracks[name].muted);
+        if (soloBtn) soloBtn.classList.toggle("on", tracks[name].solo);
+      }
+      document.querySelectorAll(".presets button").forEach((el) => {
+        el.classList.toggle("on", el.dataset.id === activePreset);
+      });
+    }
+
+    function applyPreset(id) {
+      const p = PRESETS.find((x) => x.id === id);
+      if (!p) return;
+      activePreset = id;
+      for (const [name, t] of Object.entries(tracks)) {
+        t.muted = p.mute.includes(name);
+        t.solo = false;
+      }
+      applyAudibility();
+    }
+
+    function render() {
+      document.getElementById("title").textContent = BOOT.title || "Practice player";
+      document.title = (BOOT.title || "Player") + " · Practice Stems";
+
+      const presetsEl = document.getElementById("presets");
+      presetsEl.innerHTML = "";
+      for (const p of PRESETS) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.dataset.id = p.id;
+        b.textContent = p.label;
+        b.onclick = () => applyPreset(p.id);
+        presetsEl.appendChild(b);
+      }
+
+      const stemsEl = document.getElementById("stems");
+      stemsEl.innerHTML = "";
+      for (const name of STEM_ORDER) {
+        if (!tracks[name]) continue;
+        const row = document.createElement("div");
+        row.className = "stem";
+        row.innerHTML =
+          '<div class="name">' + name + "</div>" +
+          '<input type="range" min="0" max="1" step="0.01" value="' + tracks[name].vol + '" id="vol-' + name + '" />' +
+          '<div class="vol" id="volval-' + name + '">100%</div>' +
+          '<button type="button" class="mute" id="mute-' + name + '">Mute</button>' +
+          '<button type="button" class="solo" id="solo-' + name + '">Solo</button>';
+        stemsEl.appendChild(row);
+
+        document.getElementById("vol-" + name).oninput = (e) => {
+          tracks[name].vol = parseFloat(e.target.value);
+          document.getElementById("volval-" + name).textContent =
+            Math.round(tracks[name].vol * 100) + "%";
+          activePreset = "";
+          applyAudibility();
+        };
+        document.getElementById("mute-" + name).onclick = () => {
+          tracks[name].muted = !tracks[name].muted;
+          if (tracks[name].muted) tracks[name].solo = false;
+          activePreset = "";
+          applyAudibility();
+        };
+        document.getElementById("solo-" + name).onclick = () => {
+          tracks[name].solo = !tracks[name].solo;
+          if (tracks[name].solo) tracks[name].muted = false;
+          activePreset = "";
+          applyAudibility();
+        };
+      }
+      refreshButtons();
+    }
+
+    function init() {
+      const stemMap = BOOT.stems || {};
+      const names = STEM_ORDER.filter((n) => stemMap[n]);
+      if (!names.length) {
+        setStatus("No stems found for this job.");
+        playBtn.disabled = true;
+        return;
+      }
+
+      for (const name of names) {
+        const audio = new Audio();
+        audio.preload = "auto";
+        audio.src = stemMap[name];
+        audio.addEventListener("ended", () => {
+          // When master ends, stop all
+          if (name === names[0]) stopAll();
+        });
+        tracks[name] = { audio, muted: false, solo: false, vol: 1 };
+      }
+
+      // Enable Play immediately — don't wait for full buffer
+      playBtn.disabled = false;
+      stopBtn.disabled = false;
+      resetBtn.disabled = false;
+      render();
+      applyAudibility();
+      setStatus("Ready — " + names.length + " stems. Hit Play, then use faders / Mute / Solo.");
+
+      // Update duration when metadata arrives
+      const master = tracks[names[0]].audio;
+      master.addEventListener("loadedmetadata", updateSeekUI);
+    }
+
+    function teardownAndGoHome() {
+      // Unload audio so navigation isn't blocked by buffering
+      try {
+        clearTimers();
+        for (const t of Object.values(tracks)) {
+          t.audio.pause();
+          t.audio.removeAttribute("src");
+          t.audio.load();
+        }
+      } catch (_) {}
+      window.location.replace("/");
+    }
+
+    playBtn.onclick = togglePlay;
+    stopBtn.onclick = stopAll;
+    resetBtn.onclick = () => applyPreset("all");
+    document.getElementById("homeBtn").onclick = teardownAndGoHome;
+
+    seekEl.addEventListener("pointerdown", () => { seeking = true; });
+    seekEl.addEventListener("pointerup", () => {
+      seeking = false;
+      seekToRatio(parseInt(seekEl.value, 10) / 1000);
+    });
+    seekEl.addEventListener("change", () => {
+      seekToRatio(parseInt(seekEl.value, 10) / 1000);
+      seeking = false;
+    });
+
+    init();
+  </script>
+</body>
+</html>

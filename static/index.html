@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Practice Stems</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <h1>Practice Stems</h1>
+      <span class="tag">Mac · Moises-style practice</span>
+    </div>
+    <div class="hero">
+      <p>Paste a YouTube link or upload audio/video. Separate into vocals, drums, bass, guitar, piano &amp; other — then practice with live mute, solo, and volume.</p>
+    </div>
+
+    <div class="card">
+      <div class="row two">
+        <div>
+          <label for="url">YouTube URL</label>
+          <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=…" />
+        </div>
+        <div>
+          <label for="device">Device</label>
+          <select id="device">
+            <option value="auto">Auto (GPU if available)</option>
+            <option value="cpu">CPU</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="file">Or upload local audio / video</label>
+          <input id="file" type="file" accept="audio/*,video/*,.wav,.mp3,.m4a,.flac,.ogg,.mp4,.mov,.mkv,.avi,.webm,.m4v" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="goBtn" type="button">Separate &amp; open player</button>
+        <button id="lastBtn" type="button">Open last song</button>
+        <button id="cancelBtn" type="button" class="danger" hidden>Stop loading</button>
+      </div>
+
+      <div class="device" id="deviceLabel">Detecting compute…</div>
+
+      <div class="progress" id="progress">
+        <div class="bar"><span id="barFill"></span></div>
+        <div class="status" id="status"></div>
+      </div>
+    </div>
+
+    <div class="card library" style="margin-top: 18px;">
+      <div class="library-head">
+        <h2>Your songs</h2>
+        <button type="button" id="refreshLib" class="ghost">Refresh</button>
+      </div>
+      <div id="songList" class="song-list">
+        <div class="empty">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/home.js"></script>
+</body>
+</html>

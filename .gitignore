@@ -1,0 +1,23 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# App data & caches (large / local)
+data/
+.cache/
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.webm
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Docker
+*.log
