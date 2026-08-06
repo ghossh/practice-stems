@@ -4,6 +4,20 @@ Moises-style practice app for Mac/Linux: YouTube or local audio/video → Demucs
 
 Stems: **vocals, drums, bass, guitar, piano, other** (`htdemucs_6s`).
 
+### Screenshots
+
+Home — paste a YouTube URL or upload a file, then open songs from your library:
+
+![Home screen](docs/home.png)
+
+Stem mixer — Play / seek, role presets, and per-stem volume / mute / solo:
+
+![Stem mixer](docs/player-stems.png)
+
+Presets cycling (Guitarist, Drummer, Singer, …):
+
+![Stem mixer presets](docs/player-stems.gif)
+
 ---
 
 ## Option A — Local (recommended on Mac: Apple GPU)
