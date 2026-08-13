@@ -43,7 +43,7 @@ function setBusy(busy) {
 }
 
 function fmtWhen(ts) {
-  if (!ts) return "Never played";
+  if (!ts) return "Never opened";
   const d = new Date(ts * 1000);
   return d.toLocaleString(undefined, {
     month: "short",
@@ -67,13 +67,18 @@ async function loadLibrary() {
   try {
     const { jobs } = await fetchJSON("/api/jobs");
     if (!jobs || !jobs.length) {
-      songList.innerHTML = '<div class="empty">No songs yet — separate a track above.</div>';
+      songList.innerHTML = '<div class="empty">No songs yet — open a track above.</div>';
       return;
     }
     songList.innerHTML = "";
     for (const job of jobs) {
       const row = document.createElement("div");
       row.className = "song-row";
+      const bits = [];
+      if (job.has_stems) bits.push(job.stem_count + " stems");
+      else bits.push("opened");
+      if (job.bpm) bits.push(job.bpm + " BPM");
+      bits.push(fmtWhen(job.last_played_at));
       row.innerHTML =
         '<div class="song-main">' +
         '  <div class="song-title"></div>' +
@@ -84,9 +89,8 @@ async function loadLibrary() {
         '  <button type="button" class="btn-del">Delete</button>' +
         "</div>";
       row.querySelector(".song-title").textContent = job.title;
-      row.querySelector(".song-meta").textContent =
-        job.stem_count + " stems · " + fmtWhen(job.last_played_at);
-      row.querySelector(".btn-open").href = job.player_url;
+      row.querySelector(".song-meta").textContent = bits.join(" · ");
+      row.querySelector(".btn-open").href = job.hub_url || "/song/" + job.job_id;
       row.querySelector(".btn-del").addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -113,7 +117,7 @@ async function openLatest() {
   setStatus("Loading last song…");
   try {
     const meta = await fetchJSON("/api/jobs/latest");
-    window.location.href = "/player/" + meta.job_id;
+    window.location.href = meta.hub_url || "/song/" + meta.job_id;
   } catch (e) {
     setStatus(String(e.message || e), true);
   }
@@ -144,13 +148,13 @@ async function pollTask(taskId) {
     if (pollStop) return;
     setProgress(job.progress || 0);
     setStatus(job.message || job.status);
-    if (job.status === "done" && job.player_url) {
+    if (job.status === "done" && (job.hub_url || job.job_id)) {
       setBusy(false);
-      window.location.href = job.player_url;
+      window.location.href = job.hub_url || "/song/" + job.job_id;
       return;
     }
     if (job.status === "error") {
-      setStatus(job.message || "Separation failed", true);
+      setStatus(job.message || "Open failed", true);
       setBusy(false);
       return;
     }
@@ -164,7 +168,7 @@ async function pollTask(taskId) {
   }
 }
 
-async function startSeparate() {
+async function startOpen() {
   const url = urlEl.value.trim();
   const file = fileEl.files && fileEl.files[0];
   if (!url && !file) {
@@ -179,12 +183,11 @@ async function startSeparate() {
   setStatus("Starting…");
 
   const body = new FormData();
-  body.append("device", deviceEl.value);
   if (url) body.append("url", url);
   if (file && !url) body.append("file", file);
 
   try {
-    const { task_id } = await fetchJSON("/api/separate", { method: "POST", body });
+    const { task_id } = await fetchJSON("/api/open", { method: "POST", body });
     await pollTask(task_id);
   } catch (e) {
     setStatus(String(e.message || e), true);
@@ -192,7 +195,7 @@ async function startSeparate() {
   }
 }
 
-goBtn.addEventListener("click", startSeparate);
+goBtn.addEventListener("click", startOpen);
 lastBtn.addEventListener("click", openLatest);
 cancelBtn.addEventListener("click", cancelActive);
 refreshLib.addEventListener("click", loadLibrary);

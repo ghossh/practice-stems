@@ -46,15 +46,18 @@ def latest_stems_dir() -> Path | None:
     return None
 
 
-def write_job_meta(job_id: str, title: str, stems_dir: Path | None = None) -> Path:
+def write_job_meta(job_id: str, title: str, stems_dir: Path | None = None, **extra) -> Path:
     play_dir = PLAY / job_id
     play_dir.mkdir(parents=True, exist_ok=True)
+    existing = read_job_meta(job_id) or {}
     meta = {
+        **existing,
         "job_id": job_id,
         "title": title,
         "stems": STEM_ORDER,
-        "stems_dir": str(stems_dir) if stems_dir else None,
+        "stems_dir": str(stems_dir) if stems_dir else existing.get("stems_dir"),
     }
+    meta.update(extra)
     path = play_dir / "meta.json"
     path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
     return path
@@ -67,13 +70,118 @@ def read_job_meta(job_id: str) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def patch_job_meta(job_id: str, **fields) -> dict:
+    meta = read_job_meta(job_id) or {
+        "job_id": job_id,
+        "title": job_id.replace("_", " "),
+        "stems": STEM_ORDER,
+    }
+    meta.update(fields)
+    play_dir = PLAY / job_id
+    play_dir.mkdir(parents=True, exist_ok=True)
+    (play_dir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    return meta
+
+
+def source_wav_path(job_id: str) -> Path | None:
+    """Locate source.wav for a job (incoming or beside stems_dir)."""
+    candidates = [
+        INCOMING / job_id / "source.wav",
+        PLAY / job_id / "source.wav",
+    ]
+    meta = read_job_meta(job_id) or {}
+    stems_dir = meta.get("stems_dir")
+    if stems_dir:
+        candidates.append(Path(stems_dir).parent / "source.wav")
+    for p in candidates:
+        if p.is_file():
+            return p
+    return None
+
+
+def ensure_source_mp3(job_id: str) -> Path | None:
+    """Ensure play/<id>/source.mp3 exists for hub playback."""
+    from .encode import wav_to_mp3
+
+    play_dir = PLAY / job_id
+    play_dir.mkdir(parents=True, exist_ok=True)
+    mp3 = play_dir / "source.mp3"
+    if mp3.is_file():
+        return mp3
+    wav = source_wav_path(job_id)
+    if not wav:
+        return None
+    return wav_to_mp3(wav, mp3)
+
+
+def stage_opened_song(title: str, source_wav: Path) -> str:
+    """Register a song for the hub (source only; no Demucs yet)."""
+    from .encode import wav_to_mp3
+
+    job_id = safe_id(title)
+    incoming = INCOMING / job_id
+    incoming.mkdir(parents=True, exist_ok=True)
+    dest_wav = incoming / "source.wav"
+    if source_wav.resolve() != dest_wav.resolve():
+        shutil.copy2(source_wav, dest_wav)
+
+    play_dir = PLAY / job_id
+    play_dir.mkdir(parents=True, exist_ok=True)
+    wav_to_mp3(dest_wav, play_dir / "source.mp3")
+
+    stems = list_playable_stems(job_id)
+    write_job_meta(
+        job_id,
+        title,
+        stems_dir=str(incoming / "stems") if (incoming / "stems").is_dir() else None,
+        opened=True,
+        has_stems=len(stems) >= 4,
+    )
+    return job_id
+
+
+def song_summary(job_id: str, *, ensure_source: bool = True) -> dict | None:
+    """Hub payload for a song (opened and/or separated)."""
+    play_dir = PLAY / job_id
+    if not play_dir.is_dir():
+        return None
+    meta = read_job_meta(job_id) or {"job_id": job_id, "title": job_id.replace("_", " ")}
+    if ensure_source:
+        ensure_source_mp3(job_id)
+    stems = list_playable_stems(job_id)
+    has_source = (play_dir / "source.mp3").is_file()
+    if not has_source and len(stems) < 4:
+        return None
+    return {
+        "job_id": job_id,
+        "title": meta.get("title") or job_id.replace("_", " "),
+        "hub_url": f"/song/{job_id}",
+        "player_url": f"/player/{job_id}" if len(stems) >= 4 else None,
+        "source_url": f"/media/{job_id}/source.mp3" if has_source else None,
+        "stem_count": len(stems),
+        "has_stems": len(stems) >= 4,
+        "bpm": meta.get("bpm"),
+        "bpm_meta": meta.get("bpm_meta"),
+        "last_played_at": meta.get("last_played_at"),
+        "chords_status": meta.get("chords_status") or "idle",
+        "chords": meta.get("chords") or [],
+        "chords_source": meta.get("chords_source"),
+        "chords_engine": meta.get("chords_engine"),
+        "chord_count": meta.get("chord_count") or len(meta.get("chords") or []),
+    }
+
+
 def stage_playable(title: str, stem_wavs: dict[str, Path], stems_dir: Path | None = None) -> str:
     """Encode/copy MP3s into data/play/<ascii_id>/ and write meta. Returns job_id."""
     job_id = safe_id(title)
     out_dir = PLAY / job_id
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Keep source.mp3 / meta extras; only refresh stem files
+    for name in STEM_ORDER:
+        old = out_dir / f"{name}.mp3"
+        if old.is_file():
+            old.unlink()
 
     prepared: dict[str, Path] = {}
     for name, wav in stem_wavs.items():
@@ -98,7 +206,8 @@ def stage_playable(title: str, stem_wavs: dict[str, Path], stems_dir: Path | Non
         if src.resolve() != dest.resolve():
             shutil.copy2(src, dest)
 
-    write_job_meta(job_id, title, stems_dir=stems_dir)
+    write_job_meta(job_id, title, stems_dir=stems_dir, has_stems=True, opened=True)
+    ensure_source_mp3(job_id)
     return job_id
 
 
@@ -114,28 +223,22 @@ def list_playable_stems(job_id: str) -> dict[str, str]:
 
 
 def list_jobs(limit: int = 50) -> list[dict]:
-    """List playable jobs only (fast — does not encode MP3s)."""
+    """List opened and/or separated songs."""
     items: list[dict] = []
     if not PLAY.exists():
         return items
     for job_dir in PLAY.iterdir():
         if not job_dir.is_dir():
             continue
-        stems = list_playable_stems(job_dir.name)
-        if len(stems) < 4:
+        summary = song_summary(job_dir.name, ensure_source=False)
+        if not summary:
             continue
-        meta = read_job_meta(job_dir.name) or {}
-        title = meta.get("title") or job_dir.name.replace("_", " ")
-        last_played = meta.get("last_played_at")
         mtime = job_dir.stat().st_mtime
+        last_played = summary.get("last_played_at")
         sort_key = float(last_played) if last_played else mtime
         items.append(
             {
-                "job_id": job_dir.name,
-                "title": title,
-                "player_url": f"/player/{job_dir.name}",
-                "stem_count": len(stems),
-                "last_played_at": last_played,
+                **summary,
                 "mtime": mtime,
                 "_sort": sort_key,
             }

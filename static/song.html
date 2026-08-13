@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Song · Practice Stems</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="player-top">
+      <button type="button" class="ghost" id="homeBtn">← Home</button>
+      <h1 id="title">Song</h1>
+    </div>
+
+    <div class="card preview-card">
+      <audio id="preview" controls preload="metadata"></audio>
+      <div class="footer-note" id="previewNote">Load a song to preview</div>
+    </div>
+
+    <section class="card chord-player" id="chordPlayer" hidden>
+      <div class="chord-player-head">
+        <div>
+          <h2>Chords</h2>
+          <p class="chord-player-sub" id="chordPlayerSub">Play the track — chords follow along</p>
+        </div>
+        <div class="chord-view-toggle" role="group" aria-label="Chord view">
+          <button type="button" id="viewSlide" class="on">Sliding</button>
+          <button type="button" id="viewSheet">Full sheet</button>
+        </div>
+      </div>
+
+      <div id="chordSlideView">
+        <div class="chord-now-row" id="chordNowRow">
+          <button type="button" class="chord-side" id="chordPrev" title="Previous">—</button>
+          <div class="chord-now-wrap">
+            <div class="chord-now" id="chordNow">—</div>
+            <div class="chord-now-meta" id="chordNowMeta">Hit play</div>
+          </div>
+          <button type="button" class="chord-side" id="chordNext" title="Next">—</button>
+          <button type="button" class="chord-side dim" id="chordNext2" title="Upcoming">—</button>
+        </div>
+      </div>
+
+      <div id="chordSheetView" hidden>
+        <div class="chord-sheet-scroll" id="chordSheetScroll"></div>
+      </div>
+
+      <div class="chord-timeline" id="chordTimeline"></div>
+    </section>
+
+    <h2 class="section-title">Analyze</h2>
+    <p class="section-sub">Pick what to run — like Chord AI: import once, then choose analyses.</p>
+
+    <div class="analysis-grid" id="cards">
+      <div class="analysis-card" data-id="stems">
+        <h3>Stem separation</h3>
+        <p>Split into vocals, drums, bass, guitar, piano &amp; other. Practice with mute / solo / volume.</p>
+        <div class="card-status" id="stemsStatus">Not run yet</div>
+        <div class="card-actions">
+          <button type="button" class="primary" id="stemsBtn">Run stems</button>
+          <a class="btn" id="mixerLink" hidden href="#">Open mixer</a>
+        </div>
+        <div class="progress" id="stemsProgress">
+          <div class="bar"><span id="stemsBar"></span></div>
+          <div class="status" id="stemsMsg"></div>
+        </div>
+      </div>
+
+      <div class="analysis-card" data-id="bpm">
+        <h3>Detect BPM</h3>
+        <p>Estimate tempo and beat count from the full track.</p>
+        <div class="card-status" id="bpmStatus">Not run yet</div>
+        <div class="card-actions">
+          <button type="button" class="primary" id="bpmBtn">Detect BPM</button>
+        </div>
+      </div>
+
+      <div class="analysis-card" data-id="chords">
+        <h3>Detect chords</h3>
+        <p>madmom DeepChroma (major/minor). Uses guitar+piano+other when stems exist.</p>
+        <div class="card-status" id="chordsStatus">Not run yet</div>
+        <div class="card-actions">
+          <button type="button" class="primary" id="chordsBtn">Detect chords</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="row two" style="margin-top: 18px;">
+      <div>
+        <label for="device">Device (for stems)</label>
+        <select id="device">
+          <option value="auto">Auto (GPU if available)</option>
+          <option value="cpu">CPU</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.__SONG_BOOT__ = __BOOT_JSON__;
+  </script>
+  <script src="/static/song.js"></script>
+</body>
+</html>

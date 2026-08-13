@@ -20,21 +20,27 @@ Presets cycling (Guitarist, Drummer, Singer, …):
 
 ---
 
-## Option A — Local (recommended on Mac: Apple GPU)
+## Option A — Local with conda (recommended on Mac: Apple GPU)
 
-Faster than Docker on Apple Silicon.
+Faster than Docker on Apple Silicon. Needs [Miniconda/Anaconda](https://docs.conda.io/) and Homebrew `ffmpeg`/`rubberband` only if conda packages are missing.
 
 ```bash
 cd practice_stems
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+conda env create -f environment.yml
+conda activate practice-stems
 python app.py
+```
+
+If the env already exists and you only need to refresh deps:
+
+```bash
+conda activate practice-stems
+pip install -r requirements.txt
 ```
 
 Open http://127.0.0.1:7860
 
-Needs: `ffmpeg` (Homebrew: `brew install ffmpeg`), network for YouTube + first model download.
+Needs: network for YouTube + first model download. For HQ slowdown: `brew install rubberband` (CLI on PATH).
 
 ---
 
@@ -100,11 +106,16 @@ docker run --rm -p 7860:7860 \
 
 ## How to use the app
 
-1. Paste a **YouTube URL**, or upload **audio / video** (mp4, mov, mkv, … — audio is extracted with ffmpeg).
-2. Click **Separate & open player** (or **Open last song** / pick from **Your songs**).
-3. In the player: **Play**, drag volume faders, **Mute** / **Solo**, role presets (Guitarist, Drummer, Singer, …).
-4. **Stop loading** cancels an in-progress job (after the current step).
-5. **Delete** removes a song from the library.
+1. Paste a **YouTube URL**, or upload **audio / video**, then click **Open song** (download/extract only — no Demucs yet).
+2. On the **song hub**: preview the track, then pick an analysis:
+   - **Stem separation** → opens the practice mixer when ready
+   - **Detect BPM** → tempo estimate
+   - **Detect chords** → madmom DeepChroma (maj/min); prefers guitar+piano+other stems
+3. In the mixer: **Play**, **Speed**, **HQ speed On/Off** (Off = instant browser stretch; On = Rubber Band, first time may take a bit), faders, **Mute** / **Solo**, presets, **Download mix** / **Download stems**.
+   - Prefer **0.75×–0.9×** for practice; turn **HQ speed On** when quality matters.
+4. Library **Open** returns to the song hub (not straight to stems).
+5. **Stop loading** cancels an in-progress download/open.
+6. **Delete** removes a song from the library.
 
 ---
 

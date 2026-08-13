@@ -10,10 +10,10 @@
   <div class="wrap">
     <div class="brand">
       <h1>Practice Stems</h1>
-      <span class="tag">Mac · Moises-style practice</span>
+      <span class="tag">Mac · Chord AI–style practice</span>
     </div>
     <div class="hero">
-      <p>Paste a YouTube link or upload audio/video. Separate into vocals, drums, bass, guitar, piano &amp; other — then practice with live mute, solo, and volume.</p>
+      <p>Open a song from YouTube or a local file first. Then choose analyses: stem separation, BPM, chords (soon).</p>
     </div>
 
     <div class="card">
@@ -23,7 +23,7 @@
           <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=…" />
         </div>
         <div>
-          <label for="device">Device</label>
+          <label for="device">Device (used later for stems)</label>
           <select id="device">
             <option value="auto">Auto (GPU if available)</option>
             <option value="cpu">CPU</option>
@@ -39,7 +39,7 @@
       </div>
 
       <div class="actions">
-        <button class="primary" id="goBtn" type="button">Separate &amp; open player</button>
+        <button class="primary" id="goBtn" type="button">Open song</button>
         <button id="lastBtn" type="button">Open last song</button>
         <button id="cancelBtn" type="button" class="danger" hidden>Stop loading</button>
       </div>

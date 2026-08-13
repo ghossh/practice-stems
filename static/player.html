@@ -10,11 +10,26 @@
   <div class="wrap">
     <div class="player-top">
       <button type="button" class="ghost" id="homeBtn">← Home</button>
+      <a class="ghost" id="hubLink" href="#" style="display:none">Song hub</a>
       <h1 id="title">Practice player</h1>
       <div class="transport">
         <button class="primary" id="playBtn" type="button">Play</button>
         <button id="stopBtn" type="button">Stop</button>
+        <label class="speed-wrap">
+          <span>Speed</span>
+          <select id="speedSel" title="Playback speed">
+            <option value="0.5">0.5×</option>
+            <option value="0.75">0.75×</option>
+            <option value="0.85">0.85×</option>
+            <option value="1" selected>1×</option>
+            <option value="1.25">1.25×</option>
+            <option value="1.5">1.5×</option>
+          </select>
+        </label>
+        <button type="button" id="hqSpeedBtn" class="hq-toggle" title="Off = instant browser slowdown. On = Rubber Band HQ (first time may take a while)">HQ speed: Off</button>
         <button id="resetBtn" type="button">Reset mix</button>
+        <button id="downloadBtn" type="button" title="Download current mix as MP3">Download mix</button>
+        <button id="downloadStemsBtn" type="button" title="Download all stems as a ZIP folder">Download stems</button>
       </div>
     </div>
 
@@ -45,16 +60,24 @@
       { id: "karaoke", label: "Karaoke", mute: ["vocals"] },
     ];
 
-    const tracks = {}; // name -> { audio, muted, solo, vol }
+    const tracks = {}; // name -> { audio, muted, solo, vol, originalSrc }
     let playing = false;
     let activePreset = "all";
     let seeking = false;
     let syncTimer = null;
     let uiTimer = null;
+    let playbackRate = 1;
+    let hqSpeed = 1; // speed baked into loaded stem files (1 = originals)
+    let stretchBusy = false;
+    let hqEnabled = false; // user toggle: Rubber Band HQ vs instant browser rate
 
     const playBtn = document.getElementById("playBtn");
     const stopBtn = document.getElementById("stopBtn");
     const resetBtn = document.getElementById("resetBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const downloadStemsBtn = document.getElementById("downloadStemsBtn");
+    const speedSel = document.getElementById("speedSel");
+    const hqSpeedBtn = document.getElementById("hqSpeedBtn");
     const seekEl = document.getElementById("seek");
     const tCur = document.getElementById("tCur");
     const tDur = document.getElementById("tDur");
@@ -69,6 +92,248 @@
 
     function setStatus(msg) {
       statusEl.textContent = msg || "";
+    }
+
+    function syncHqButton() {
+      if (!hqSpeedBtn) return;
+      hqSpeedBtn.classList.toggle("on", hqEnabled);
+      hqSpeedBtn.textContent = hqEnabled ? "HQ speed: On" : "HQ speed: Off";
+    }
+
+    function originalStemMap() {
+      const orig = {};
+      for (const [name, t] of Object.entries(tracks)) orig[name] = t.originalSrc;
+      return orig;
+    }
+
+    function applyRate() {
+      // When HQ stems are loaded for this speed, play at 1× (stretch already applied)
+      const rate = hqEnabled && hqSpeed === playbackRate ? 1 : playbackRate;
+      for (const t of Object.values(tracks)) {
+        t.audio.playbackRate = rate;
+        try {
+          t.audio.preservesPitch = true;
+          t.audio.mozPreservesPitch = true;
+          t.audio.webkitPreservesPitch = true;
+        } catch (_) {}
+      }
+    }
+
+    function currentRatio() {
+      const a = masterAudio();
+      const dur = duration();
+      if (!a || !(dur > 0)) return 0;
+      return Math.max(0, Math.min(1, (a.currentTime || 0) / dur));
+    }
+
+    async function loadStemUrls(stemMap, keepRatio) {
+      const ratio = keepRatio ? currentRatio() : 0;
+      const wasPlaying = playing;
+      if (wasPlaying) pauseAll();
+      const loads = [];
+      for (const [name, url] of Object.entries(stemMap)) {
+        if (!tracks[name]) continue;
+        const a = tracks[name].audio;
+        a.src = url;
+        loads.push(
+          new Promise((resolve) => {
+            const done = () => {
+              a.removeEventListener("loadedmetadata", done);
+              a.removeEventListener("error", done);
+              resolve();
+            };
+            a.addEventListener("loadedmetadata", done);
+            a.addEventListener("error", done);
+            a.load();
+          })
+        );
+      }
+      await Promise.all(loads);
+      applyRate();
+      if (keepRatio) seekToRatio(ratio);
+      else updateSeekUI();
+      if (wasPlaying) await playAll();
+    }
+
+    async function restoreOriginalStems(statusMsg) {
+      if (hqSpeed === 1) {
+        applyRate();
+        if (statusMsg) setStatus(statusMsg);
+        return;
+      }
+      stretchBusy = true;
+      speedSel.disabled = true;
+      if (hqSpeedBtn) hqSpeedBtn.disabled = true;
+      setStatus("Restoring 1× stems…");
+      try {
+        await loadStemUrls(originalStemMap(), true);
+        hqSpeed = 1;
+        if (statusMsg) setStatus(statusMsg);
+      } catch (e) {
+        setStatus("Restore failed: " + e.message);
+      } finally {
+        stretchBusy = false;
+        speedSel.disabled = false;
+        if (hqSpeedBtn) hqSpeedBtn.disabled = false;
+      }
+    }
+
+    async function prepareHqStretch(next) {
+      stretchBusy = true;
+      speedSel.disabled = true;
+      if (hqSpeedBtn) hqSpeedBtn.disabled = true;
+      setStatus("Preparing HQ " + next + "× (Rubber Band when available)…");
+      try {
+        const res = await fetch("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/stretch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ speed: next }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || res.statusText);
+        await loadStemUrls(data.stems || {}, true);
+        hqSpeed = next;
+        const eng = data.engine || "unknown";
+        setStatus(
+          "HQ " + next + "× via " + eng +
+            (eng === "atempo" ? " (install rubberband for better quality)" : "") +
+            " — faders still work."
+        );
+      } catch (e) {
+        hqSpeed = 1;
+        try { await loadStemUrls(originalStemMap(), true); } catch (_) {}
+        applyRate();
+        setStatus("HQ stretch failed (" + e.message + ") — using browser slowdown.");
+      } finally {
+        stretchBusy = false;
+        speedSel.disabled = false;
+        if (hqSpeedBtn) hqSpeedBtn.disabled = false;
+      }
+    }
+
+    async function setSpeed(rate) {
+      const next = Math.max(0.25, Math.min(2, Number(rate) || 1));
+      playbackRate = next;
+      if (speedSel) speedSel.value = String(playbackRate);
+      if (!BOOT.job_id || stretchBusy) {
+        applyRate();
+        return;
+      }
+      applyRate();
+
+      if (Math.abs(next - 1) < 1e-6) {
+        await restoreOriginalStems("Playing at 1×");
+        return;
+      }
+
+      if (!hqEnabled) {
+        // Instant browser slowdown (no server processing)
+        if (hqSpeed !== 1) await restoreOriginalStems();
+        applyRate();
+        setStatus("Playing at " + next + "× (browser — turn on HQ speed for better quality).");
+        return;
+      }
+
+      await prepareHqStretch(next);
+    }
+
+    async function toggleHqSpeed() {
+      if (stretchBusy) return;
+      hqEnabled = !hqEnabled;
+      syncHqButton();
+      if (!BOOT.job_id) return;
+
+      if (!hqEnabled) {
+        // Switch to instant mode: unload HQ files if loaded
+        await restoreOriginalStems(
+          Math.abs(playbackRate - 1) < 1e-6
+            ? "HQ speed Off"
+            : "HQ speed Off — using browser " + playbackRate + "×"
+        );
+        applyRate();
+        return;
+      }
+
+      // HQ On: if not at 1×, process now
+      if (Math.abs(playbackRate - 1) < 1e-6) {
+        setStatus("HQ speed On — pick a speed other than 1× to process.");
+        return;
+      }
+      await prepareHqStretch(playbackRate);
+    }
+
+    function mixPayload() {
+      const volumes = {};
+      const muted = {};
+      const solo = {};
+      for (const [name, t] of Object.entries(tracks)) {
+        volumes[name] = t.vol;
+        muted[name] = !!t.muted;
+        solo[name] = !!t.solo;
+      }
+      return { volumes, muted, solo, speed: playbackRate };
+    }
+
+    async function saveDownload(res, fallbackName) {
+      if (!res.ok) {
+        let msg = res.statusText;
+        try {
+          const j = await res.json();
+          msg = j.detail || msg;
+        } catch (_) {
+          try { msg = await res.text(); } catch (__) {}
+        }
+        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition") || "";
+      const m = /filename=\"?([^\";]+)\"?/.exec(cd);
+      const fname = (m && m[1]) || fallbackName;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return fname;
+    }
+
+    async function downloadMix() {
+      if (!BOOT.job_id) return;
+      downloadBtn.disabled = true;
+      setStatus("Rendering mix MP3…");
+      try {
+        const res = await fetch("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/export", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(mixPayload()),
+        });
+        const fname = await saveDownload(res, "mix.mp3");
+        setStatus("Downloaded " + fname + " (" + playbackRate + "×, current mute/vols).");
+      } catch (e) {
+        setStatus("Download failed: " + e.message);
+      } finally {
+        downloadBtn.disabled = false;
+      }
+    }
+
+    async function downloadStems() {
+      if (!BOOT.job_id) return;
+      downloadStemsBtn.disabled = true;
+      setStatus("Packing stems ZIP…");
+      try {
+        const res = await fetch(
+          "/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/stems.zip"
+        );
+        const fname = await saveDownload(res, "stems.zip");
+        setStatus("Downloaded " + fname + " (folder with all stem MP3s).");
+      } catch (e) {
+        setStatus("Download stems failed: " + e.message);
+      } finally {
+        downloadStemsBtn.disabled = false;
+      }
     }
 
     function anySolo() {
@@ -131,11 +396,12 @@
       if (!list.length) return;
       applyAudibility();
       try {
+        applyRate();
         await Promise.all(list.map((t) => t.audio.play()));
         playing = true;
         playBtn.textContent = "Pause";
         startTimers();
-        setStatus("Playing — drag faders to practice.");
+        setStatus("Playing at " + playbackRate + "×" + (hqEnabled && hqSpeed === playbackRate && playbackRate !== 1 ? " HQ" : "") + " — drag faders to practice.");
       } catch (e) {
         playing = false;
         playBtn.textContent = "Play";
@@ -202,6 +468,11 @@
     function render() {
       document.getElementById("title").textContent = BOOT.title || "Practice player";
       document.title = (BOOT.title || "Player") + " · Practice Stems";
+      const hub = document.getElementById("hubLink");
+      if (hub && BOOT.hub_url) {
+        hub.href = BOOT.hub_url;
+        hub.style.display = "";
+      }
 
       const presetsEl = document.getElementById("presets");
       presetsEl.innerHTML = "";
@@ -268,16 +539,22 @@
           // When master ends, stop all
           if (name === names[0]) stopAll();
         });
-        tracks[name] = { audio, muted: false, solo: false, vol: 1 };
+        tracks[name] = { audio, muted: false, solo: false, vol: 1, originalSrc: stemMap[name] };
       }
 
       // Enable Play immediately — don't wait for full buffer
       playBtn.disabled = false;
       stopBtn.disabled = false;
       resetBtn.disabled = false;
+      downloadBtn.disabled = false;
+      downloadStemsBtn.disabled = false;
+      speedSel.disabled = false;
+      if (hqSpeedBtn) hqSpeedBtn.disabled = false;
+      syncHqButton();
+      applyRate();
       render();
       applyAudibility();
-      setStatus("Ready — " + names.length + " stems. Hit Play, then use faders / Mute / Solo.");
+      setStatus("Ready — " + names.length + " stems. HQ speed is Off (instant). Turn On for Rubber Band quality.");
 
       // Update duration when metadata arrives
       const master = tracks[names[0]].audio;
@@ -300,6 +577,10 @@
     playBtn.onclick = togglePlay;
     stopBtn.onclick = stopAll;
     resetBtn.onclick = () => applyPreset("all");
+    downloadBtn.onclick = downloadMix;
+    downloadStemsBtn.onclick = downloadStems;
+    speedSel.onchange = () => setSpeed(speedSel.value);
+    if (hqSpeedBtn) hqSpeedBtn.onclick = toggleHqSpeed;
     document.getElementById("homeBtn").onclick = teardownAndGoHome;
 
     seekEl.addEventListener("pointerdown", () => { seeking = true; });
