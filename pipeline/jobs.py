@@ -168,6 +168,8 @@ def song_summary(job_id: str, *, ensure_source: bool = True) -> dict | None:
         "chords_source": meta.get("chords_source"),
         "chords_engine": meta.get("chords_engine"),
         "chord_count": meta.get("chord_count") or len(meta.get("chords") or []),
+        "key": meta.get("key"),
+        "key_meta": meta.get("key_meta"),
     }
 
 

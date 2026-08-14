@@ -37,12 +37,98 @@ const chordNowMeta = document.getElementById("chordNowMeta");
 const viewSlide = document.getElementById("viewSlide");
 const viewSheet = document.getElementById("viewSheet");
 const deviceEl = document.getElementById("device");
+const keyDownBtn = document.getElementById("keyDownBtn");
+const keyUpBtn = document.getElementById("keyUpBtn");
+const keyVal = document.getElementById("keyVal");
+
+const MAX_KEY = 6;
+const NOTE_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const FLAT_TO_SHARP = {
+  Db: "C#",
+  Eb: "D#",
+  Fb: "E",
+  Gb: "F#",
+  Ab: "G#",
+  Bb: "A#",
+  Cb: "B",
+};
 
 let pollStop = false;
 let chordList = [];
+let originalChords = []; // untransposed labels from detection
 let activeChordIdx = -1;
 let chordViewMode = "slide"; // slide | sheet
 let syncRaf = 0;
+let keySemitones = 0;
+let pitchedSourceUrl = null;
+let originalSourceUrl = null;
+let pitchBusy = false;
+let pendingKey = null;
+let pitchGen = 0;
+
+function fmtKeyOffset(n) {
+  if (n === 0) return "0";
+  return (n > 0 ? "+" : "") + n;
+}
+
+function transposeKeyName(keyName, semitones) {
+  if (!keyName) return null;
+  const m = String(keyName).match(/^([A-G](?:#|b)?)(m?)$/);
+  if (!m) return null;
+  const idx = noteIndex(m[1]);
+  if (idx < 0) return null;
+  const next = NOTE_SHARP[(idx + semitones + 120) % 12];
+  return next + (m[2] || "");
+}
+
+function keyLabelText() {
+  const orig = BOOT.key || null;
+  if (!orig) {
+    return keySemitones === 0 ? "…" : fmtKeyOffset(keySemitones);
+  }
+  const cur = transposeKeyName(orig, keySemitones) || orig;
+  if (!keySemitones) return orig;
+  return orig + "→" + cur;
+}
+
+function syncKeyUI() {
+  if (keyVal) {
+    keyVal.textContent = keyLabelText();
+    keyVal.title = BOOT.key
+      ? (keySemitones
+          ? "Original " + BOOT.key + " · " + fmtKeyOffset(keySemitones) + " semitones"
+          : "Detected key " + BOOT.key)
+      : (keySemitones
+          ? fmtKeyOffset(keySemitones) + " semitones — run Detect chords for key name"
+          : "Run Detect chords (or wait) for key name");
+  }
+  if (keyDownBtn) keyDownBtn.disabled = keySemitones <= -MAX_KEY;
+  if (keyUpBtn) keyUpBtn.disabled = keySemitones >= MAX_KEY;
+}
+
+function noteIndex(root) {
+  if (!root) return -1;
+  let r = root;
+  if (FLAT_TO_SHARP[r]) r = FLAT_TO_SHARP[r];
+  return NOTE_SHARP.indexOf(r);
+}
+
+function transposeChordLabel(label, semitones) {
+  if (!label || label === "N" || label === "?" || !semitones) return label;
+  const m = String(label).match(/^([A-G](?:#|b)?)(.*)$/);
+  if (!m) return label;
+  const idx = noteIndex(m[1]);
+  if (idx < 0) return label;
+  const next = NOTE_SHARP[(idx + semitones + 120) % 12];
+  return next + (m[2] || "");
+}
+
+function chordsForKey(semitones) {
+  return (originalChords || []).map((c) => ({
+    ...c,
+    label: transposeChordLabel(c.label, semitones),
+  }));
+}
 
 function fmtTime(sec) {
   if (!isFinite(sec) || sec < 0) return "0:00";
@@ -149,7 +235,8 @@ function setChordView(mode) {
 }
 
 function renderChords(chords, meta) {
-  chordList = chords || [];
+  originalChords = (chords || []).map((c) => ({ ...c }));
+  chordList = chordsForKey(keySemitones);
   activeChordIdx = -1;
 
   if (!chordList.length) {
@@ -161,11 +248,18 @@ function renderChords(chords, meta) {
 
   chordPlayer.hidden = false;
   const src = meta && meta.chords_source ? meta.chords_source : "";
+  const keyNote =
+    keySemitones !== 0
+      ? " · " + keyLabelText()
+      : BOOT.key
+        ? " · key " + BOOT.key
+        : "";
   chordPlayerSub.textContent =
     chordList.length +
     " chords" +
     (src ? " · " + src : "") +
-    " — play audio; sliding view follows the song";
+    keyNote +
+    " — play audio; change Key anytime";
 
   const duration = Math.max(...chordList.map((c) => c.end || 0), 1);
   chordTimeline.innerHTML = "";
@@ -203,6 +297,143 @@ function renderChords(chords, meta) {
   setChordView(chordViewMode);
   setActiveChord(indexAtTime(preview.currentTime || 0), true);
   chordPlayer.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  syncKeyUI();
+}
+
+function applyPreviewSource(url, note) {
+  if (!preview || !url) return;
+  const t = preview.currentTime || 0;
+  const wasPlaying = !preview.paused && !preview.ended;
+  // Preload next URL while current keeps playing
+  const probe = new Audio();
+  probe.preload = "auto";
+  const swap = () => {
+    probe.removeEventListener("canplaythrough", swap);
+    probe.removeEventListener("loadedmetadata", swap);
+    probe.removeEventListener("error", swap);
+    preview.src = url;
+    previewNote.textContent = note || "Full track preview — chords follow when detected";
+    const onMeta = () => {
+      preview.removeEventListener("loadedmetadata", onMeta);
+      try {
+        preview.currentTime = Math.min(t, preview.duration || t);
+      } catch (_) {}
+      if (wasPlaying) preview.play().catch(() => {});
+    };
+    preview.addEventListener("loadedmetadata", onMeta);
+    preview.load();
+  };
+  probe.addEventListener("canplaythrough", swap);
+  probe.addEventListener("loadedmetadata", swap);
+  probe.addEventListener("error", swap);
+  probe.src = url;
+  probe.load();
+}
+
+async function applyPitchForKey(semitones) {
+  if (!originalSourceUrl && BOOT.source_url) originalSourceUrl = BOOT.source_url;
+  if (!originalSourceUrl) return;
+
+  const gen = ++pitchGen;
+  if (semitones === 0) {
+    pitchedSourceUrl = null;
+    applyPreviewSource(
+      originalSourceUrl,
+      BOOT.key ? "Preview in " + BOOT.key : "Original key"
+    );
+    return;
+  }
+
+  pitchBusy = true;
+  syncKeyUI();
+  const name = transposeKeyName(BOOT.key, semitones);
+  previewNote.textContent =
+    "Transposing" +
+    (!preview.paused ? " while playing" : "") +
+    " → " +
+    (name || fmtKeyOffset(semitones)) +
+    "…";
+  try {
+    const r = await fetchJSON("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/pitch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        semitones: semitones,
+        include_stems: false,
+        include_source: true,
+      }),
+    });
+    if (gen !== pitchGen) return;
+    pitchedSourceUrl = r.source_url;
+    applyPreviewSource(
+      pitchedSourceUrl,
+      (name || "Key " + fmtKeyOffset(semitones)) +
+        (BOOT.key && semitones ? " (" + BOOT.key + " " + fmtKeyOffset(semitones) + ")" : "") +
+        (r.engine ? " · " + r.engine : "")
+    );
+  } catch (e) {
+    if (gen !== pitchGen) return;
+    previewNote.textContent =
+      "Pitch failed: " + (e.message || e) + " — chords still transposed";
+  } finally {
+    if (gen === pitchGen) {
+      pitchBusy = false;
+      syncKeyUI();
+      if (pendingKey !== null && pendingKey !== semitones) {
+        const next = pendingKey;
+        pendingKey = null;
+        keySemitones = next;
+        syncKeyUI();
+        if (originalChords.length) renderChords(originalChords, BOOT);
+        await applyPitchForKey(next);
+      } else {
+        pendingKey = null;
+      }
+    }
+  }
+}
+
+async function setKey(delta) {
+  if (!BOOT.job_id) return;
+  const next = Math.max(-MAX_KEY, Math.min(MAX_KEY, keySemitones + delta));
+  if (next === keySemitones && !pitchBusy) return;
+  keySemitones = next;
+  syncKeyUI();
+
+  // Chord labels update immediately (even mid-song)
+  if (originalChords.length) {
+    renderChords(originalChords, BOOT);
+  }
+
+  if (pitchBusy) {
+    pendingKey = next;
+    previewNote.textContent = "Queued " + keyLabelText() + "…";
+    return;
+  }
+  await applyPitchForKey(next);
+}
+
+async function ensureKeyDetected() {
+  if (BOOT.key) {
+    syncKeyUI();
+    return;
+  }
+  if (!BOOT.job_id) return;
+  try {
+    const r = await fetchJSON("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/key", {
+      method: "POST",
+    });
+    if (r.key) {
+      BOOT.key = r.key;
+      BOOT.key_meta = r;
+      syncKeyUI();
+      if (previewNote && !keySemitones) {
+        previewNote.textContent = "Detected key " + r.key + " — use Key −/+ while playing";
+      }
+    }
+  } catch (_) {
+    syncKeyUI();
+  }
 }
 
 function applySong(s) {
@@ -210,12 +441,26 @@ function applySong(s) {
   document.title = (s.title || "Song") + " · Practice Stems";
 
   if (s.source_url) {
-    preview.src = s.source_url;
-    previewNote.textContent = "Full track preview — chords follow when detected";
+    originalSourceUrl = s.source_url;
+    if (keySemitones !== 0 && pitchedSourceUrl) {
+      preview.src = pitchedSourceUrl;
+      previewNote.textContent = "Preview in " + keyLabelText();
+    } else {
+      preview.src = s.source_url;
+      previewNote.textContent = s.key
+        ? "Key " + s.key + " — chords follow when detected"
+        : "Full track preview — chords follow when detected";
+    }
   } else {
+    originalSourceUrl = null;
+    pitchedSourceUrl = null;
     preview.removeAttribute("src");
     previewNote.textContent = "No source preview — run stems or re-open the song.";
   }
+
+  if (s.key) BOOT.key = s.key;
+  if (s.key_meta) BOOT.key_meta = s.key_meta;
+  syncKeyUI();
 
   if (s.has_stems && s.player_url) {
     stemsStatus.textContent = "Ready — " + (s.stem_count || 6) + " stems";
@@ -328,12 +573,18 @@ async function runChords() {
     BOOT.chords_status = "done";
     BOOT.chords_source = r.source;
     BOOT.chords_engine = r.engine;
+    if (r.key) {
+      BOOT.key = r.key;
+      BOOT.key_meta = r.key_meta;
+      syncKeyUI();
+    }
     chordsStatus.textContent =
       r.chord_count +
       " chords · " +
       (r.source || "") +
       " · " +
-      (r.engine || "madmom");
+      (r.engine || "madmom") +
+      (r.key ? " · key " + r.key : "");
     renderChords(r.chords, BOOT);
     // Auto-start playback so chords move with audio
     if (preview && preview.src) {
@@ -359,6 +610,8 @@ bpmBtn.onclick = runBpm;
 chordsBtn.onclick = runChords;
 viewSlide.onclick = () => setChordView("slide");
 viewSheet.onclick = () => setChordView("sheet");
+if (keyDownBtn) keyDownBtn.onclick = () => setKey(-1);
+if (keyUpBtn) keyUpBtn.onclick = () => setKey(1);
 chordPrev.onclick = () => {
   if (activeChordIdx > 0) seekToChord(activeChordIdx - 1);
 };
@@ -384,4 +637,6 @@ preview.addEventListener("timeupdate", () => {
 });
 
 applySong(BOOT);
+syncKeyUI();
+ensureKeyDetected();
 if (BOOT.chords && BOOT.chords.length) startChordSync();

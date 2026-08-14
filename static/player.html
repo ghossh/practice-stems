@@ -27,6 +27,12 @@
           </select>
         </label>
         <button type="button" id="hqSpeedBtn" class="hq-toggle" title="Off = instant browser slowdown. On = Rubber Band HQ (first time may take a while)">HQ speed: Off</button>
+        <div class="key-wrap" title="Transpose while playing. Shows song key name when known.">
+          <span>Key</span>
+          <button type="button" id="keyDownBtn" aria-label="Lower key">−</button>
+          <span class="key-val" id="keyVal">—</span>
+          <button type="button" id="keyUpBtn" aria-label="Raise key">+</button>
+        </div>
         <button id="resetBtn" type="button">Reset mix</button>
         <button id="downloadBtn" type="button" title="Download current mix as MP3">Download mix</button>
         <button id="downloadStemsBtn" type="button" title="Download all stems as a ZIP folder">Download stems</button>
@@ -70,6 +76,15 @@
     let hqSpeed = 1; // speed baked into loaded stem files (1 = originals)
     let stretchBusy = false;
     let hqEnabled = false; // user toggle: Rubber Band HQ vs instant browser rate
+    const MAX_KEY = 6;
+    let keySemitones = 0; // UI key offset
+    let bakedKey = 0; // semitones baked into currently loaded stems
+    let pendingKey = null; // latest requested key while a transform is running
+    let transformGen = 0; // ignore stale transforms
+    const NOTE_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const FLAT_TO_SHARP = {
+      Db: "C#", Eb: "D#", Fb: "E", Gb: "F#", Ab: "G#", Bb: "A#", Cb: "B",
+    };
 
     const playBtn = document.getElementById("playBtn");
     const stopBtn = document.getElementById("stopBtn");
@@ -78,10 +93,75 @@
     const downloadStemsBtn = document.getElementById("downloadStemsBtn");
     const speedSel = document.getElementById("speedSel");
     const hqSpeedBtn = document.getElementById("hqSpeedBtn");
+    const keyDownBtn = document.getElementById("keyDownBtn");
+    const keyUpBtn = document.getElementById("keyUpBtn");
+    const keyVal = document.getElementById("keyVal");
     const seekEl = document.getElementById("seek");
     const tCur = document.getElementById("tCur");
     const tDur = document.getElementById("tDur");
     const statusEl = document.getElementById("status");
+
+    function fmtKeyOffset(n) {
+      if (n === 0) return "0";
+      return (n > 0 ? "+" : "") + n;
+    }
+
+    function noteIndex(root) {
+      if (!root) return -1;
+      const r = FLAT_TO_SHARP[root] || root;
+      return NOTE_SHARP.indexOf(r);
+    }
+
+    function transposeKeyName(keyName, semitones) {
+      if (!keyName) return null;
+      const m = String(keyName).match(/^([A-G](?:#|b)?)(m?)$/);
+      if (!m) return null;
+      const idx = noteIndex(m[1]);
+      if (idx < 0) return null;
+      const next = NOTE_SHARP[(idx + semitones + 120) % 12];
+      return next + (m[2] || "");
+    }
+
+    function keyLabelText() {
+      const orig = BOOT.key || null;
+      if (!orig) {
+        return keySemitones === 0 ? "…" : fmtKeyOffset(keySemitones);
+      }
+      const cur = transposeKeyName(orig, keySemitones) || orig;
+      if (!keySemitones) return orig;
+      return orig + "→" + cur;
+    }
+
+    function syncKeyUI() {
+      if (keyVal) {
+        keyVal.textContent = keyLabelText();
+        keyVal.title = BOOT.key
+          ? (keySemitones
+              ? "Original " + BOOT.key + " · " + fmtKeyOffset(keySemitones) + " semitones"
+              : "Detected key " + BOOT.key)
+          : (keySemitones
+              ? fmtKeyOffset(keySemitones) + " semitones (detect key from song hub)"
+              : "Detect chords/key from song hub to see key name");
+      }
+      // Keep −/+ usable while playing; only lock at range edges
+      if (keyDownBtn) keyDownBtn.disabled = keySemitones <= -MAX_KEY;
+      if (keyUpBtn) keyUpBtn.disabled = keySemitones >= MAX_KEY;
+    }
+
+    function setTransformBusy(busy) {
+      stretchBusy = busy;
+      if (speedSel) speedSel.disabled = busy;
+      if (hqSpeedBtn) hqSpeedBtn.disabled = busy;
+      syncKeyUI();
+    }
+
+    function needsServerFiles() {
+      return keySemitones !== 0 || (hqEnabled && Math.abs(playbackRate - 1) >= 1e-6);
+    }
+
+    function serverSpeedForBake() {
+      return hqEnabled ? playbackRate : 1;
+    }
 
     function fmt(sec) {
       if (!isFinite(sec) || sec < 0) return "0:00";
@@ -108,7 +188,8 @@
 
     function applyRate() {
       // When HQ stems are loaded for this speed, play at 1× (stretch already applied)
-      const rate = hqEnabled && hqSpeed === playbackRate ? 1 : playbackRate;
+      const rate =
+        hqEnabled && Math.abs(hqSpeed - playbackRate) < 1e-6 ? 1 : playbackRate;
       for (const t of Object.values(tracks)) {
         t.audio.playbackRate = rate;
         try {
@@ -127,28 +208,57 @@
     }
 
     async function loadStemUrls(stemMap, keepRatio) {
+      // Capture position while still playing — only pause at the swap moment
       const ratio = keepRatio ? currentRatio() : 0;
       const wasPlaying = playing;
-      if (wasPlaying) pauseAll();
       const loads = [];
       for (const [name, url] of Object.entries(stemMap)) {
         if (!tracks[name]) continue;
         const a = tracks[name].audio;
-        a.src = url;
+        // Preload into a temp Audio so current playback can continue until swap
         loads.push(
           new Promise((resolve) => {
+            const probe = new Audio();
+            probe.preload = "auto";
             const done = () => {
-              a.removeEventListener("loadedmetadata", done);
-              a.removeEventListener("error", done);
-              resolve();
+              probe.removeEventListener("canplaythrough", done);
+              probe.removeEventListener("loadedmetadata", done);
+              probe.removeEventListener("error", done);
+              resolve(url);
             };
-            a.addEventListener("loadedmetadata", done);
-            a.addEventListener("error", done);
-            a.load();
+            probe.addEventListener("canplaythrough", done);
+            probe.addEventListener("loadedmetadata", done);
+            probe.addEventListener("error", done);
+            probe.src = url;
+            probe.load();
           })
         );
       }
       await Promise.all(loads);
+      // Brief pause only for source swap
+      if (wasPlaying) pauseAll();
+      for (const [name, url] of Object.entries(stemMap)) {
+        if (!tracks[name]) continue;
+        const a = tracks[name].audio;
+        a.src = url;
+        a.load();
+      }
+      // Wait for metadata on swapped elements
+      await Promise.all(
+        Object.values(tracks).map(
+          (t) =>
+            new Promise((resolve) => {
+              if (t.audio.readyState >= 1) return resolve();
+              const done = () => {
+                t.audio.removeEventListener("loadedmetadata", done);
+                t.audio.removeEventListener("error", done);
+                resolve();
+              };
+              t.audio.addEventListener("loadedmetadata", done);
+              t.audio.addEventListener("error", done);
+            })
+        )
+      );
       applyRate();
       if (keepRatio) seekToRatio(ratio);
       else updateSeekUI();
@@ -156,58 +266,88 @@
     }
 
     async function restoreOriginalStems(statusMsg) {
-      if (hqSpeed === 1) {
+      if (hqSpeed === 1 && bakedKey === 0) {
         applyRate();
         if (statusMsg) setStatus(statusMsg);
         return;
       }
-      stretchBusy = true;
-      speedSel.disabled = true;
-      if (hqSpeedBtn) hqSpeedBtn.disabled = true;
-      setStatus("Restoring 1× stems…");
+      setTransformBusy(true);
+      setStatus("Restoring original stems…");
       try {
         await loadStemUrls(originalStemMap(), true);
         hqSpeed = 1;
+        bakedKey = 0;
         if (statusMsg) setStatus(statusMsg);
       } catch (e) {
         setStatus("Restore failed: " + e.message);
       } finally {
-        stretchBusy = false;
-        speedSel.disabled = false;
-        if (hqSpeedBtn) hqSpeedBtn.disabled = false;
+        setTransformBusy(false);
       }
     }
 
-    async function prepareHqStretch(next) {
-      stretchBusy = true;
-      speedSel.disabled = true;
-      if (hqSpeedBtn) hqSpeedBtn.disabled = true;
-      setStatus("Preparing HQ " + next + "× (Rubber Band when available)…");
+    async function prepareTransformed(statusHint) {
+      const bakeSpeed = serverSpeedForBake();
+      const key = keySemitones;
+      const gen = ++transformGen;
+      if (!needsServerFiles()) {
+        await restoreOriginalStems(
+          statusHint ||
+            (BOOT.key ? "Playing in " + BOOT.key : "Playing original key · 1×")
+        );
+        applyRate();
+        return;
+      }
+      setTransformBusy(true);
+      const bits = [];
+      const name = BOOT.key ? transposeKeyName(BOOT.key, key) : null;
+      if (name) bits.push(name);
+      else if (key) bits.push("key " + fmtKeyOffset(key));
+      if (hqEnabled && Math.abs(bakeSpeed - 1) >= 1e-6) bits.push("HQ " + bakeSpeed + "×");
+      setStatus("Transposing" + (playing ? " while playing" : "") + " → " + (bits.join(" · ") || "stems") + "…");
       try {
         const res = await fetch("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/stretch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ speed: next }),
+          body: JSON.stringify({ speed: bakeSpeed, semitones: key }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || res.statusText);
+        // Stale request (user clicked again) — skip swap
+        if (gen !== transformGen) return;
         await loadStemUrls(data.stems || {}, true);
-        hqSpeed = next;
+        if (gen !== transformGen) return;
+        hqSpeed = bakeSpeed;
+        bakedKey = key;
         const eng = data.engine || "unknown";
-        setStatus(
-          "HQ " + next + "× via " + eng +
-            (eng === "atempo" ? " (install rubberband for better quality)" : "") +
-            " — faders still work."
-        );
+        const msgBits = [];
+        if (name) msgBits.push(name + (BOOT.key && key ? " (" + BOOT.key + " " + fmtKeyOffset(key) + ")" : ""));
+        else if (key) msgBits.push("key " + fmtKeyOffset(key));
+        if (hqEnabled && Math.abs(playbackRate - 1) >= 1e-6) {
+          msgBits.push("HQ " + playbackRate + "× via " + eng);
+        } else if (Math.abs(playbackRate - 1) >= 1e-6) {
+          msgBits.push(playbackRate + "× browser");
+        }
+        setStatus((msgBits.join(" · ") || "Ready") + " — keep playing, change key anytime.");
       } catch (e) {
+        if (gen !== transformGen) return;
         hqSpeed = 1;
+        bakedKey = 0;
+        keySemitones = 0;
+        syncKeyUI();
         try { await loadStemUrls(originalStemMap(), true); } catch (_) {}
         applyRate();
-        setStatus("HQ stretch failed (" + e.message + ") — using browser slowdown.");
+        setStatus("Transform failed (" + e.message + ") — back to original.");
       } finally {
-        stretchBusy = false;
-        speedSel.disabled = false;
-        if (hqSpeedBtn) hqSpeedBtn.disabled = false;
+        if (gen === transformGen) setTransformBusy(false);
+        // Apply latest queued key change
+        if (pendingKey !== null && pendingKey !== bakedKey) {
+          keySemitones = pendingKey;
+          pendingKey = null;
+          syncKeyUI();
+          await prepareTransformed();
+        } else {
+          pendingKey = null;
+        }
       }
     }
 
@@ -219,22 +359,30 @@
         applyRate();
         return;
       }
-      applyRate();
 
-      if (Math.abs(next - 1) < 1e-6) {
-        await restoreOriginalStems("Playing at 1×");
-        return;
-      }
-
-      if (!hqEnabled) {
-        // Instant browser slowdown (no server processing)
-        if (hqSpeed !== 1) await restoreOriginalStems();
+      if (!needsServerFiles()) {
+        if (hqSpeed !== 1 || bakedKey !== 0) await restoreOriginalStems();
         applyRate();
-        setStatus("Playing at " + next + "× (browser — turn on HQ speed for better quality).");
+        setStatus(
+          Math.abs(next - 1) < 1e-6
+            ? "Playing at 1×" + (BOOT.key ? " · " + (transposeKeyName(BOOT.key, keySemitones) || BOOT.key) : "")
+            : "Playing at " + next + "× (browser — turn on HQ speed for better quality)."
+        );
         return;
       }
 
-      await prepareHqStretch(next);
+      if (!hqEnabled && keySemitones !== 0) {
+        if (bakedKey !== keySemitones || hqSpeed !== 1) {
+          await prepareTransformed();
+        } else {
+          applyRate();
+          const name = transposeKeyName(BOOT.key, keySemitones);
+          setStatus((name || "Key " + fmtKeyOffset(keySemitones)) + " · " + next + "× browser");
+        }
+        return;
+      }
+
+      await prepareTransformed();
     }
 
     async function toggleHqSpeed() {
@@ -244,22 +392,63 @@
       if (!BOOT.job_id) return;
 
       if (!hqEnabled) {
-        // Switch to instant mode: unload HQ files if loaded
-        await restoreOriginalStems(
-          Math.abs(playbackRate - 1) < 1e-6
-            ? "HQ speed Off"
-            : "HQ speed Off — using browser " + playbackRate + "×"
-        );
-        applyRate();
+        if (keySemitones !== 0) {
+          await prepareTransformed();
+        } else {
+          await restoreOriginalStems(
+            Math.abs(playbackRate - 1) < 1e-6
+              ? "HQ speed Off"
+              : "HQ speed Off — using browser " + playbackRate + "×"
+          );
+          applyRate();
+        }
         return;
       }
 
-      // HQ On: if not at 1×, process now
-      if (Math.abs(playbackRate - 1) < 1e-6) {
+      if (Math.abs(playbackRate - 1) < 1e-6 && keySemitones === 0) {
         setStatus("HQ speed On — pick a speed other than 1× to process.");
         return;
       }
-      await prepareHqStretch(playbackRate);
+      await prepareTransformed();
+    }
+
+    async function setKey(delta) {
+      if (!BOOT.job_id) return;
+      const next = Math.max(-MAX_KEY, Math.min(MAX_KEY, keySemitones + delta));
+      if (next === keySemitones && !stretchBusy) return;
+      keySemitones = next;
+      syncKeyUI();
+      // Update label immediately; bake in background while audio keeps playing
+      if (stretchBusy) {
+        pendingKey = next;
+        setStatus("Queued " + keyLabelText() + "…");
+        return;
+      }
+      await prepareTransformed();
+      applyRate();
+    }
+
+    async function ensureKeyDetected() {
+      if (BOOT.key || !BOOT.job_id) {
+        syncKeyUI();
+        return;
+      }
+      try {
+        const res = await fetch("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/key", {
+          method: "POST",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.key) {
+          BOOT.key = data.key;
+          BOOT.key_meta = data;
+          syncKeyUI();
+          setStatus("Detected key " + data.key + " — use Key −/+ while playing.");
+        } else {
+          syncKeyUI();
+        }
+      } catch (_) {
+        syncKeyUI();
+      }
     }
 
     function mixPayload() {
@@ -551,10 +740,12 @@
       speedSel.disabled = false;
       if (hqSpeedBtn) hqSpeedBtn.disabled = false;
       syncHqButton();
+      syncKeyUI();
       applyRate();
       render();
       applyAudibility();
-      setStatus("Ready — " + names.length + " stems. HQ speed is Off (instant). Turn On for Rubber Band quality.");
+      setStatus("Ready — " + names.length + " stems. Change Key while playing.");
+      ensureKeyDetected();
 
       // Update duration when metadata arrives
       const master = tracks[names[0]].audio;
@@ -581,6 +772,8 @@
     downloadStemsBtn.onclick = downloadStems;
     speedSel.onchange = () => setSpeed(speedSel.value);
     if (hqSpeedBtn) hqSpeedBtn.onclick = toggleHqSpeed;
+    if (keyDownBtn) keyDownBtn.onclick = () => setKey(-1);
+    if (keyUpBtn) keyUpBtn.onclick = () => setKey(1);
     document.getElementById("homeBtn").onclick = teardownAndGoHome;
 
     seekEl.addEventListener("pointerdown", () => { seeking = true; });

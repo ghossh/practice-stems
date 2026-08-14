@@ -14,7 +14,15 @@
     </div>
 
     <div class="card preview-card">
-      <audio id="preview" controls preload="metadata"></audio>
+      <div class="preview-top">
+        <audio id="preview" controls preload="metadata"></audio>
+        <div class="key-wrap" title="Transpose while playing. Shows key name when known.">
+          <span>Key</span>
+          <button type="button" id="keyDownBtn" aria-label="Lower key">−</button>
+          <span class="key-val" id="keyVal">—</span>
+          <button type="button" id="keyUpBtn" aria-label="Raise key">+</button>
+        </div>
+      </div>
       <div class="footer-note" id="previewNote">Load a song to preview</div>
     </div>
 

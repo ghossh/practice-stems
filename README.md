@@ -111,8 +111,9 @@ docker run --rm -p 7860:7860 \
    - **Stem separation** → opens the practice mixer when ready
    - **Detect BPM** → tempo estimate
    - **Detect chords** → madmom DeepChroma (maj/min); prefers guitar+piano+other stems
-3. In the mixer: **Play**, **Speed**, **HQ speed On/Off** (Off = instant browser stretch; On = Rubber Band, first time may take a bit), faders, **Mute** / **Solo**, presets, **Download mix** / **Download stems**.
+3. In the mixer: **Play**, **Speed**, **Key −/+** (shows key name e.g. `Bm→Am`; change anytime while playing), **HQ speed On/Off**, faders, **Mute** / **Solo**, presets, **Download mix** / **Download stems**.
    - Prefer **0.75×–0.9×** for practice; turn **HQ speed On** when quality matters.
+   - On the song hub, **Key −/+** shifts chord labels + preview audio (key name from Detect chords / auto detect).
 4. Library **Open** returns to the song hub (not straight to stems).
 5. **Stop loading** cancels an in-progress download/open.
 6. **Delete** removes a song from the library.

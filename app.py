@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from pipeline.device import device_label, pick_device
 from pipeline.download import download_audio
-from pipeline.analyze import detect_bpm, detect_chords_for_job
+from pipeline.analyze import detect_bpm, detect_chords_for_job, detect_key_for_job
 from pipeline.jobs import (
     DATA,
     INCOMING,
@@ -40,7 +40,13 @@ from pipeline.jobs import (
 )
 from pipeline.mix import export_mix, export_stems_zip
 from pipeline.separate import STEM_ORDER, separate_stems
-from pipeline.stretch import ensure_stretched_stems, stretch_engine
+from pipeline.stretch import (
+    MAX_SEMITONES,
+    clamp_semitones,
+    ensure_pitched_source,
+    ensure_transformed_stems,
+    stretch_engine,
+)
 
 
 class MixExportBody(BaseModel):
@@ -52,6 +58,13 @@ class MixExportBody(BaseModel):
 
 class StretchBody(BaseModel):
     speed: float = 1.0
+    semitones: int = 0
+
+
+class PitchBody(BaseModel):
+    semitones: int = 0
+    include_stems: bool = True
+    include_source: bool = False
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
@@ -230,6 +243,8 @@ def create_app() -> FastAPI:
             "stems": stems,
             "stem_order": STEM_ORDER,
             "hub_url": f"/song/{job_id}",
+            "key": meta.get("key"),
+            "key_meta": meta.get("key_meta"),
         }
         html = (STATIC / "player.html").read_text(encoding="utf-8")
         boot_json = json.dumps(boot).replace("<", "\\u003c")
@@ -259,6 +274,24 @@ def create_app() -> FastAPI:
         if not re.fullmatch(r"[a-z]+\.mp3", filename):
             raise HTTPException(400, "bad filename")
         path = (PLAY / job_id / "stretch" / tag / filename).resolve()
+        if not str(path).startswith(str(PLAY.resolve())) or not path.is_file():
+            raise HTTPException(404, "missing file")
+        return FileResponse(
+            path,
+            media_type="audio/mpeg",
+            headers={"Content-Disposition": f'inline; filename="{filename}"'},
+        )
+
+    @app.get("/media/{job_id}/xform/{tag}/{filename}")
+    async def media_xform(job_id: str, tag: str, filename: str):
+        if not re.fullmatch(r"[A-Za-z0-9_\-]+", job_id):
+            raise HTTPException(400, "bad job id")
+        # e.g. s1_km2, s0p75_k3
+        if not re.fullmatch(r"s[0-9p]+_k(?:m)?[0-9]+", tag):
+            raise HTTPException(400, "bad xform tag")
+        if not re.fullmatch(r"(?:[a-z]+|source)\.mp3", filename):
+            raise HTTPException(400, "bad filename")
+        path = (PLAY / job_id / "xform" / tag / filename).resolve()
         if not str(path).startswith(str(PLAY.resolve())) or not path.is_file():
             raise HTTPException(404, "missing file")
         return FileResponse(
@@ -338,31 +371,86 @@ def create_app() -> FastAPI:
             chords_status="done",
             chords_source=result.get("source"),
             chords_engine=result.get("engine"),
+            **(
+                {"key": result["key"], "key_meta": result.get("key_meta")}
+                if result.get("key")
+                else {}
+            ),
         )
+        return {"job_id": job_id, **result}
+
+    @app.post("/api/jobs/{job_id}/key")
+    async def api_detect_key(job_id: str):
+        if not re.fullmatch(r"[A-Za-z0-9_\-]+", job_id):
+            raise HTTPException(400, "bad job id")
+        if not (PLAY / job_id).is_dir():
+            raise HTTPException(404, "song not found")
+        try:
+            result = detect_key_for_job(job_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(500, f"Key detection failed: {exc}") from exc
+        patch_job_meta(job_id, key=result["key"], key_meta=result)
         return {"job_id": job_id, **result}
 
     @app.post("/api/jobs/{job_id}/stretch")
     async def api_stretch_stems(job_id: str, body: StretchBody):
-        """HQ pitch-preserving stem stretch for practice playback."""
+        """HQ time-stretch and/or key transpose for practice playback."""
         if not re.fullmatch(r"[A-Za-z0-9_\-]+", job_id):
             raise HTTPException(400, "bad job id")
         if not (PLAY / job_id).is_dir():
             raise HTTPException(404, "job not found")
         speed = max(0.25, min(2.0, float(body.speed)))
+        semitones = clamp_semitones(body.semitones)
         try:
-            result = ensure_stretched_stems(job_id, speed)
+            result = ensure_transformed_stems(job_id, speed=speed, semitones=semitones)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
         except RuntimeError as exc:
-            raise HTTPException(500, f"Stretch failed: {exc}") from exc
+            raise HTTPException(500, f"Transform failed: {exc}") from exc
         result["preferred_engine"] = stretch_engine()
+        result["max_semitones"] = MAX_SEMITONES
         return result
+
+    @app.post("/api/jobs/{job_id}/pitch")
+    async def api_pitch(job_id: str, body: PitchBody):
+        """Key transpose stems and/or source preview (tempo unchanged)."""
+        if not re.fullmatch(r"[A-Za-z0-9_\-]+", job_id):
+            raise HTTPException(400, "bad job id")
+        if not (PLAY / job_id).is_dir():
+            raise HTTPException(404, "job not found")
+        semitones = clamp_semitones(body.semitones)
+        out: dict = {
+            "job_id": job_id,
+            "semitones": semitones,
+            "max_semitones": MAX_SEMITONES,
+            "preferred_engine": stretch_engine(),
+        }
+        try:
+            if body.include_stems:
+                stems = ensure_transformed_stems(job_id, speed=1.0, semitones=semitones)
+                out["engine"] = stems.get("engine")
+                out["stems"] = stems.get("stems") or {}
+            if body.include_source:
+                src = ensure_pitched_source(job_id, semitones)
+                out["engine"] = src.get("engine") or out.get("engine")
+                out["source_url"] = src.get("source_url")
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(500, f"Pitch failed: {exc}") from exc
+        if not body.include_stems and not body.include_source:
+            raise HTTPException(400, "include_stems or include_source required")
+        return out
 
     @app.get("/api/stretch-engine")
     async def api_stretch_engine():
-        return {"engine": stretch_engine()}
+        return {"engine": stretch_engine(), "max_semitones": MAX_SEMITONES}
 
     @app.post("/api/jobs/{job_id}/separate")
     async def api_separate_existing(job_id: str, device: str = Form("auto")):

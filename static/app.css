@@ -207,6 +207,50 @@ button:disabled {
   font: inherit;
 }
 
+.key-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.key-wrap > span:first-child {
+  margin-right: 2px;
+}
+.key-wrap button {
+  min-width: 36px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.key-val {
+  min-width: 72px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.chord-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.preview-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.preview-top audio {
+  flex: 1;
+  min-width: 200px;
+}
+
 button.hq-toggle.on {
   outline: 2px solid var(--accent);
   border-color: var(--accent);
