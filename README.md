@@ -106,14 +106,14 @@ docker run --rm -p 7860:7860 \
 
 ## How to use the app
 
-1. Paste a **YouTube URL**, or upload **audio / video**, then click **Open song** (download/extract only — no Demucs yet).
+1. Paste a **YouTube URL** (or `youtu.be/…`), or upload **audio / video**, then click **Open song**.
 2. On the **song hub**: preview the track, then pick an analysis:
-   - **Stem separation** → opens the practice mixer when ready
+   - **Stem separation** → opens the practice mixer when ready (device preference is set in the mixer)
    - **Detect BPM** → tempo estimate
-   - **Detect chords** → madmom DeepChroma (maj/min); prefers guitar+piano+other stems
-3. In the mixer: **Play**, **Speed**, **Key −/+** (shows key name e.g. `Bm→Am`; change anytime while playing), **HQ speed On/Off**, faders, **Mute** / **Solo**, presets, **Download mix** / **Download stems**.
+   - **Detect chords** → major/minor **changes only** (short blips merged); prefers guitar+piano+other stems
+3. In the mixer: **Play**, **Speed**, **Key −/+** (shows key name e.g. `Bm→Am`; change anytime while playing), **Device** (Auto/CPU for stem runs), **HQ speed On/Off**, faders, **Mute** / **Solo**, presets, **Download mix** / **Download stems**.
    - Prefer **0.75×–0.9×** for practice; turn **HQ speed On** when quality matters.
-   - On the song hub, **Key −/+** shifts chord labels + preview audio (key name from Detect chords / auto detect).
+   - Library: click anywhere on a song row to open it.
 4. Library **Open** returns to the song hub (not straight to stems).
 5. **Stop loading** cancels an in-progress download/open.
 6. **Delete** removes a song from the library.

@@ -30,6 +30,8 @@ def download_audio(url: str, out_dir: Path) -> tuple[Path, str]:
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
+        # YouTube often 403s on the default web client (SABR / PO-token rollout).
+        "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
         "progress_hooks": [_hook],
         "postprocessors": [
             {

@@ -2,26 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d12" />
   <title>Song · Practice Stems</title>
   <link rel="stylesheet" href="/static/app.css" />
 </head>
 <body>
   <div class="wrap">
     <div class="player-top">
-      <button type="button" class="ghost" id="homeBtn">← Home</button>
+      <div class="player-nav">
+        <button type="button" class="ghost" id="homeBtn">← Home</button>
+      </div>
       <h1 id="title">Song</h1>
     </div>
 
     <div class="card preview-card">
-      <div class="preview-top">
-        <audio id="preview" controls preload="metadata"></audio>
-        <div class="key-wrap" title="Transpose while playing. Shows key name when known.">
-          <span>Key</span>
-          <button type="button" id="keyDownBtn" aria-label="Lower key">−</button>
-          <span class="key-val" id="keyVal">—</span>
-          <button type="button" id="keyUpBtn" aria-label="Raise key">+</button>
-        </div>
+      <audio id="preview" controls preload="metadata"></audio>
+      <div class="key-bar">
+        <span class="key-bar-label">Key</span>
+        <button type="button" class="key-btn" id="keyDownBtn" aria-label="Lower key">−</button>
+        <span class="key-val" id="keyVal">—</span>
+        <button type="button" class="key-btn" id="keyUpBtn" aria-label="Raise key">+</button>
+        <span class="key-hint" id="keyHint">Transpose while playing</span>
       </div>
       <div class="footer-note" id="previewNote">Load a song to preview</div>
     </div>
@@ -58,7 +60,7 @@
     </section>
 
     <h2 class="section-title">Analyze</h2>
-    <p class="section-sub">Pick what to run — like Chord AI: import once, then choose analyses.</p>
+    <p class="section-sub">Pick what to run — import once, then choose analyses.</p>
 
     <div class="analysis-grid" id="cards">
       <div class="analysis-card" data-id="stems">
@@ -77,7 +79,7 @@
 
       <div class="analysis-card" data-id="bpm">
         <h3>Detect BPM</h3>
-        <p>Estimate tempo and beat count from the full track.</p>
+        <p>Estimate tempo, time signature (4/4, 3/4, …), and beat count.</p>
         <div class="card-status" id="bpmStatus">Not run yet</div>
         <div class="card-actions">
           <button type="button" class="primary" id="bpmBtn">Detect BPM</button>
@@ -86,21 +88,11 @@
 
       <div class="analysis-card" data-id="chords">
         <h3>Detect chords</h3>
-        <p>madmom DeepChroma (major/minor). Uses guitar+piano+other when stems exist.</p>
+        <p>Major/minor changes only (merged). Uses guitar+piano+other when stems exist.</p>
         <div class="card-status" id="chordsStatus">Not run yet</div>
         <div class="card-actions">
           <button type="button" class="primary" id="chordsBtn">Detect chords</button>
         </div>
-      </div>
-    </div>
-
-    <div class="row two" style="margin-top: 18px;">
-      <div>
-        <label for="device">Device (for stems)</label>
-        <select id="device">
-          <option value="auto">Auto (GPU if available)</option>
-          <option value="cpu">CPU</option>
-        </select>
       </div>
     </div>
   </div>

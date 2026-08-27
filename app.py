@@ -245,6 +245,12 @@ def create_app() -> FastAPI:
             "hub_url": f"/song/{job_id}",
             "key": meta.get("key"),
             "key_meta": meta.get("key_meta"),
+            "bpm": meta.get("bpm"),
+            "bpm_meta": meta.get("bpm_meta"),
+            "time_signature": meta.get("time_signature")
+            or (meta.get("bpm_meta") or {}).get("time_signature"),
+            "beats_per_bar": meta.get("beats_per_bar")
+            or (meta.get("bpm_meta") or {}).get("beats_per_bar"),
         }
         html = (STATIC / "player.html").read_text(encoding="utf-8")
         boot_json = json.dumps(boot).replace("<", "\\u003c")
@@ -349,7 +355,13 @@ def create_app() -> FastAPI:
             result = detect_bpm(audio)
         except Exception as exc:
             raise HTTPException(500, f"BPM failed: {exc}") from exc
-        patch_job_meta(job_id, bpm=result["bpm"], bpm_meta=result)
+        patch_job_meta(
+            job_id,
+            bpm=result["bpm"],
+            bpm_meta=result,
+            time_signature=result.get("time_signature"),
+            beats_per_bar=result.get("beats_per_bar"),
+        )
         return {"job_id": job_id, **result}
 
     @app.post("/api/jobs/{job_id}/chords")

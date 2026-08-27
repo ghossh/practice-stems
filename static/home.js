@@ -11,14 +11,12 @@ async function fetchJSON(url, opts) {
 
 const urlEl = document.getElementById("url");
 const fileEl = document.getElementById("file");
-const deviceEl = document.getElementById("device");
 const goBtn = document.getElementById("goBtn");
 const lastBtn = document.getElementById("lastBtn");
 const cancelBtn = document.getElementById("cancelBtn");
 const progress = document.getElementById("progress");
 const barFill = document.getElementById("barFill");
 const statusEl = document.getElementById("status");
-const deviceLabel = document.getElementById("deviceLabel");
 const songList = document.getElementById("songList");
 const refreshLib = document.getElementById("refreshLib");
 
@@ -53,13 +51,8 @@ function fmtWhen(ts) {
   });
 }
 
-async function initDevice() {
-  try {
-    const d = await fetchJSON("/api/device");
-    deviceLabel.textContent = "Detected compute: " + d.label;
-  } catch {
-    deviceLabel.textContent = "Detected compute: CPU";
-  }
+function looksLikeYoutube(s) {
+  return /youtu\.?be|youtube\.com/i.test(s || "");
 }
 
 async function loadLibrary() {
@@ -72,25 +65,28 @@ async function loadLibrary() {
     }
     songList.innerHTML = "";
     for (const job of jobs) {
-      const row = document.createElement("div");
+      const href = job.hub_url || "/song/" + job.job_id;
+      const row = document.createElement("a");
       row.className = "song-row";
+      row.href = href;
       const bits = [];
       if (job.has_stems) bits.push(job.stem_count + " stems");
       else bits.push("opened");
-      if (job.bpm) bits.push(job.bpm + " BPM");
+      if (job.key) bits.push(job.key);
+      if (job.bpm) {
+        bits.push(
+          job.bpm + " BPM" + (job.time_signature ? " · " + job.time_signature : "")
+        );
+      }
       bits.push(fmtWhen(job.last_played_at));
       row.innerHTML =
         '<div class="song-main">' +
         '  <div class="song-title"></div>' +
         '  <div class="song-meta"></div>' +
         "</div>" +
-        '<div class="song-actions">' +
-        '  <a class="btn-open" href="">Open</a>' +
-        '  <button type="button" class="btn-del">Delete</button>' +
-        "</div>";
+        '<button type="button" class="btn-del" title="Delete" aria-label="Delete">✕</button>';
       row.querySelector(".song-title").textContent = job.title;
       row.querySelector(".song-meta").textContent = bits.join(" · ");
-      row.querySelector(".btn-open").href = job.hub_url || "/song/" + job.job_id;
       row.querySelector(".btn-del").addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -169,8 +165,15 @@ async function pollTask(taskId) {
 }
 
 async function startOpen() {
-  const url = urlEl.value.trim();
+  let url = (urlEl.value || "").trim();
   const file = fileEl.files && fileEl.files[0];
+
+  // Soft-normalize common YouTube paste formats
+  if (url && !/^https?:\/\//i.test(url) && looksLikeYoutube(url)) {
+    url = "https://" + url.replace(/^\/+/, "");
+    urlEl.value = url;
+  }
+
   if (!url && !file) {
     setProgress(0);
     progress.classList.add("on");
@@ -180,7 +183,7 @@ async function startOpen() {
 
   setBusy(true);
   setProgress(0.02);
-  setStatus("Starting…");
+  setStatus(url ? "Opening YouTube…" : "Opening file…");
 
   const body = new FormData();
   if (url) body.append("url", url);
@@ -199,5 +202,10 @@ goBtn.addEventListener("click", startOpen);
 lastBtn.addEventListener("click", openLatest);
 cancelBtn.addEventListener("click", cancelActive);
 refreshLib.addEventListener("click", loadLibrary);
-initDevice();
+urlEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    startOpen();
+  }
+});
 loadLibrary();

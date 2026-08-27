@@ -140,8 +140,75 @@ def detect_key_for_job(job_id: str) -> dict:
     return out
 
 
+def _estimate_time_signature(beat_strengths) -> dict:
+    """Guess meter from relative accent strength on beat positions.
+
+    Scores candidates 2/4, 3/4, 4/4, 6/8 (as 6 pulses). Prefers common meters
+    when scores are close. Returns time_signature, beats_per_bar, confidence.
+    """
+    import numpy as np
+
+    strengths = np.asarray(beat_strengths, dtype=float).reshape(-1)
+    if strengths.size < 8:
+        return {
+            "time_signature": "4/4",
+            "beats_per_bar": 4,
+            "meter_confidence": 0.0,
+            "meter_scores": {},
+        }
+
+    # Normalize so accents are comparable across tracks
+    strengths = strengths - strengths.min()
+    peak = float(strengths.max())
+    if peak > 1e-9:
+        strengths = strengths / peak
+
+    candidates = (
+        ("2/4", 2, 4),
+        ("3/4", 3, 4),
+        ("4/4", 4, 4),
+        ("6/8", 6, 8),
+    )
+    scores: dict[str, float] = {}
+    for label, n, _den in candidates:
+        usable = (len(strengths) // n) * n
+        if usable < n * 2:
+            scores[label] = 0.0
+            continue
+        grid = strengths[:usable].reshape(-1, n)
+        means = grid.mean(axis=0)
+        # Downbeat (pos 0) should stand out; for 6/8 also accent beat 4 (index 3)
+        down = float(means[0])
+        others = float(np.mean(means[1:])) if n > 1 else 0.0
+        score = down - others
+        if n == 6 and means.size >= 4:
+            mid = float(means[3])
+            score += 0.35 * (mid - others)
+        # Mild preference for 4/4 when ambiguous (most pop/rock)
+        if label == "4/4":
+            score += 0.05
+        scores[label] = round(score, 4)
+
+    best_label = max(scores, key=scores.get)
+    ranked = sorted(scores.values(), reverse=True)
+    gap = (ranked[0] - ranked[1]) if len(ranked) >= 2 else 0.0
+    # Absolute gap — relative ratio blows up when scores are near zero
+    conf = max(0.0, min(1.0, gap / 0.12)) if gap > 0 else 0.0
+    # When accents are unclear, prefer 4/4 (most common practice meter)
+    if gap < 0.04 or scores[best_label] < 0.02:
+        best_label = "4/4"
+        conf = 0.0
+    beats_per_bar = next(n for lab, n, _d in candidates if lab == best_label)
+    return {
+        "time_signature": best_label,
+        "beats_per_bar": beats_per_bar,
+        "meter_confidence": round(conf, 3),
+        "meter_scores": scores,
+    }
+
+
 def detect_bpm(audio_path: Path) -> dict:
-    """Estimate tempo with librosa. Returns bpm + confidence-ish metadata."""
+    """Estimate tempo + time signature. Returns bpm, meter, beat phase."""
     import librosa
     import numpy as np
 
@@ -152,18 +219,35 @@ def detect_bpm(audio_path: Path) -> dict:
     if y.size < sr:  # < 1s
         raise ValueError("Audio too short for BPM detection")
 
-    tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
+    onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+    tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr, onset_envelope=onset_env)
     # librosa >=0.10 may return ndarray for tempo
     if hasattr(tempo, "__len__"):
         bpm = float(np.asarray(tempo).reshape(-1)[0])
     else:
         bpm = float(tempo)
 
-    beat_times = librosa.frames_to_time(beat_frames, sr=sr).tolist()
+    beat_times = librosa.frames_to_time(beat_frames, sr=sr)
+    beat_frames = np.asarray(beat_frames, dtype=int).reshape(-1)
+    # Strength at each beat frame (clamp to envelope length)
+    if beat_frames.size:
+        idx = np.clip(beat_frames, 0, len(onset_env) - 1)
+        beat_strengths = onset_env[idx]
+    else:
+        beat_strengths = np.asarray([], dtype=float)
+
+    meter = _estimate_time_signature(beat_strengths)
+    beat0 = float(beat_times[0]) if len(beat_times) else 0.0
+
     return {
         "bpm": round(bpm, 1),
-        "beat_count": len(beat_times),
+        "beat_count": int(len(beat_times)),
+        "beat_0": round(beat0, 4),
         "duration_sec": round(float(librosa.get_duration(y=y, sr=sr)), 2),
+        "time_signature": meter["time_signature"],
+        "beats_per_bar": meter["beats_per_bar"],
+        "meter_confidence": meter["meter_confidence"],
+        "meter_scores": meter["meter_scores"],
     }
 
 
@@ -283,10 +367,83 @@ def _pretty_chord_label(raw: str) -> str:
     return s.replace(":", "")
 
 
+def collapse_chord_changes(
+    chords: list[dict],
+    *,
+    min_dur: float = 0.45,
+) -> list[dict]:
+    """
+    Keep only chord *changes*: merge consecutive identical labels,
+    absorb very short blips into neighbors, drop brief N gaps.
+    """
+    if not chords:
+        return []
+
+    # 1) Merge consecutive same labels
+    merged: list[dict] = []
+    for c in chords:
+        label = str(c.get("label") or "N")
+        start = float(c.get("start") or 0)
+        end = float(c.get("end") or start)
+        if end < start:
+            end = start
+        if merged and merged[-1]["label"] == label:
+            merged[-1]["end"] = max(merged[-1]["end"], end)
+            # keep earliest raw
+        else:
+            merged.append(
+                {
+                    "start": start,
+                    "end": end,
+                    "label": label,
+                    "raw": c.get("raw", label),
+                }
+            )
+
+    # 2) Absorb short segments into previous (or next if first)
+    i = 0
+    while i < len(merged):
+        dur = merged[i]["end"] - merged[i]["start"]
+        label = merged[i]["label"]
+        short = dur < min_dur
+        is_n = label == "N"
+        if short or (is_n and dur < min_dur * 2):
+            if i > 0:
+                merged[i - 1]["end"] = merged[i]["end"]
+                merged.pop(i)
+                # re-merge if now same as next
+                if i < len(merged) and merged[i - 1]["label"] == merged[i]["label"]:
+                    merged[i - 1]["end"] = merged[i]["end"]
+                    merged.pop(i)
+                continue
+            if i + 1 < len(merged):
+                merged[i + 1]["start"] = merged[i]["start"]
+                merged.pop(i)
+                continue
+        i += 1
+
+    # 3) Final consecutive merge + round
+    out: list[dict] = []
+    for c in merged:
+        if out and out[-1]["label"] == c["label"]:
+            out[-1]["end"] = c["end"]
+        else:
+            out.append(
+                {
+                    "start": round(float(c["start"]), 3),
+                    "end": round(float(c["end"]), 3),
+                    "label": c["label"],
+                    "raw": c.get("raw", c["label"]),
+                }
+            )
+    return out
+
+
 def detect_chords(audio_path: Path) -> dict:
     """
     madmom DeepChroma chord recognition.
     Returns {chords: [{start,end,label,raw}], chord_count, engine}.
+    Chords are collapsed to change-points only (fewer, stabler labels).
     """
     import numpy as np
     from madmom.audio.chroma import DeepChromaProcessor
@@ -337,6 +494,7 @@ def detect_chords(audio_path: Path) -> dict:
             }
         )
 
+    chords = collapse_chord_changes(chords)
     return {
         "chords": chords,
         "chord_count": len(chords),

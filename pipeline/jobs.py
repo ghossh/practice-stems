@@ -162,6 +162,10 @@ def song_summary(job_id: str, *, ensure_source: bool = True) -> dict | None:
         "has_stems": len(stems) >= 4,
         "bpm": meta.get("bpm"),
         "bpm_meta": meta.get("bpm_meta"),
+        "time_signature": meta.get("time_signature")
+        or (meta.get("bpm_meta") or {}).get("time_signature"),
+        "beats_per_bar": meta.get("beats_per_bar")
+        or (meta.get("bpm_meta") or {}).get("beats_per_bar"),
         "last_played_at": meta.get("last_played_at"),
         "chords_status": meta.get("chords_status") or "idle",
         "chords": meta.get("chords") or [],

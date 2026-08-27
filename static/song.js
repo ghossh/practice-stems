@@ -36,10 +36,19 @@ const chordNext2 = document.getElementById("chordNext2");
 const chordNowMeta = document.getElementById("chordNowMeta");
 const viewSlide = document.getElementById("viewSlide");
 const viewSheet = document.getElementById("viewSheet");
-const deviceEl = document.getElementById("device");
 const keyDownBtn = document.getElementById("keyDownBtn");
 const keyUpBtn = document.getElementById("keyUpBtn");
 const keyVal = document.getElementById("keyVal");
+const keyHint = document.getElementById("keyHint");
+
+function preferredDevice() {
+  try {
+    const v = localStorage.getItem("practiceDevice");
+    return v === "cpu" ? "cpu" : "auto";
+  } catch (_) {
+    return "auto";
+  }
+}
 
 const MAX_KEY = 6;
 const NOTE_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -100,7 +109,12 @@ function syncKeyUI() {
           : "Detected key " + BOOT.key)
       : (keySemitones
           ? fmtKeyOffset(keySemitones) + " semitones — run Detect chords for key name"
-          : "Run Detect chords (or wait) for key name");
+          : "Run Detect chords for key name");
+  }
+  if (keyHint) {
+    keyHint.textContent = BOOT.key
+      ? (keySemitones ? "was " + BOOT.key : "detected")
+      : "run Detect chords for name";
   }
   if (keyDownBtn) keyDownBtn.disabled = keySemitones <= -MAX_KEY;
   if (keyUpBtn) keyUpBtn.disabled = keySemitones >= MAX_KEY;
@@ -121,6 +135,59 @@ function transposeChordLabel(label, semitones) {
   if (idx < 0) return label;
   const next = NOTE_SHARP[(idx + semitones + 120) % 12];
   return next + (m[2] || "");
+}
+
+/** Collapse consecutive same chords + drop short blips (for older saved data). */
+function collapseChordChanges(chords, minDur) {
+  minDur = minDur == null ? 0.45 : minDur;
+  if (!chords || !chords.length) return [];
+  const merged = [];
+  for (const c of chords) {
+    const label = String(c.label || "N");
+    const start = Number(c.start) || 0;
+    let end = c.end != null ? Number(c.end) : start;
+    if (end < start) end = start;
+    if (merged.length && merged[merged.length - 1].label === label) {
+      merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, end);
+    } else {
+      merged.push({ ...c, label, start, end });
+    }
+  }
+  let i = 0;
+  while (i < merged.length) {
+    const dur = merged[i].end - merged[i].start;
+    const short = dur < minDur || (merged[i].label === "N" && dur < minDur * 2);
+    if (short) {
+      if (i > 0) {
+        merged[i - 1].end = merged[i].end;
+        merged.splice(i, 1);
+        if (i < merged.length && merged[i - 1].label === merged[i].label) {
+          merged[i - 1].end = merged[i].end;
+          merged.splice(i, 1);
+        }
+        continue;
+      }
+      if (i + 1 < merged.length) {
+        merged[i + 1].start = merged[i].start;
+        merged.splice(i, 1);
+        continue;
+      }
+    }
+    i += 1;
+  }
+  const out = [];
+  for (const c of merged) {
+    if (out.length && out[out.length - 1].label === c.label) {
+      out[out.length - 1].end = c.end;
+    } else {
+      out.push({
+        ...c,
+        start: Math.round(c.start * 1000) / 1000,
+        end: Math.round(c.end * 1000) / 1000,
+      });
+    }
+  }
+  return out;
 }
 
 function chordsForKey(semitones) {
@@ -235,7 +302,7 @@ function setChordView(mode) {
 }
 
 function renderChords(chords, meta) {
-  originalChords = (chords || []).map((c) => ({ ...c }));
+  originalChords = collapseChordChanges(chords || []);
   chordList = chordsForKey(keySemitones);
   activeChordIdx = -1;
 
@@ -413,7 +480,36 @@ async function setKey(delta) {
   await applyPitchForKey(next);
 }
 
+function estimateKeyFromChordsLocal(chords) {
+  if (!chords || !chords.length) return null;
+  const score = {};
+  for (const c of chords) {
+    const label = String(c.label || "");
+    if (!label || label === "N" || label === "?") continue;
+    const dur = Math.max((c.end || 0) - (c.start || 0), 0.05);
+    score[label] = (score[label] || 0) + dur;
+  }
+  let best = null;
+  let bestW = 0;
+  for (const [lab, w] of Object.entries(score)) {
+    // Prefer simple maj/min roots (C, Am, …)
+    if (!/^([A-G](?:#|b)?)(m?)$/.test(lab)) continue;
+    if (w > bestW) {
+      bestW = w;
+      best = lab;
+    }
+  }
+  return best;
+}
+
 async function ensureKeyDetected() {
+  if (!BOOT.key && originalChords.length) {
+    const guess = estimateKeyFromChordsLocal(originalChords);
+    if (guess) {
+      BOOT.key = guess;
+      syncKeyUI();
+    }
+  }
   if (BOOT.key) {
     syncKeyUI();
     return;
@@ -475,7 +571,8 @@ function applySong(s) {
 
   if (s.bpm) {
     const beats = s.bpm_meta && s.bpm_meta.beat_count ? " · " + s.bpm_meta.beat_count + " beats" : "";
-    bpmStatus.textContent = s.bpm + " BPM" + beats;
+    const meter = s.time_signature || (s.bpm_meta && s.bpm_meta.time_signature) || "";
+    bpmStatus.textContent = s.bpm + " BPM" + (meter ? " · " + meter : "") + beats;
   } else {
     bpmStatus.textContent = "Not run yet";
   }
@@ -531,7 +628,7 @@ async function runStems() {
   stemsProgress.classList.add("on");
   try {
     const body = new FormData();
-    body.append("device", deviceEl.value);
+    body.append("device", preferredDevice());
     const { task_id } = await fetchJSON(
       "/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/separate",
       { method: "POST", body }
@@ -551,9 +648,17 @@ async function runBpm() {
     const r = await fetchJSON("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/bpm", {
       method: "POST",
     });
-    bpmStatus.textContent = r.bpm + " BPM · " + (r.beat_count || 0) + " beats";
+    bpmStatus.textContent =
+      r.bpm +
+      " BPM" +
+      (r.time_signature ? " · " + r.time_signature : "") +
+      " · " +
+      (r.beat_count || 0) +
+      " beats";
     BOOT.bpm = r.bpm;
     BOOT.bpm_meta = r;
+    BOOT.time_signature = r.time_signature;
+    BOOT.beats_per_bar = r.beats_per_bar;
   } catch (e) {
     bpmStatus.textContent = "Failed: " + (e.message || e);
   } finally {
@@ -610,8 +715,19 @@ bpmBtn.onclick = runBpm;
 chordsBtn.onclick = runChords;
 viewSlide.onclick = () => setChordView("slide");
 viewSheet.onclick = () => setChordView("sheet");
-if (keyDownBtn) keyDownBtn.onclick = () => setKey(-1);
-if (keyUpBtn) keyUpBtn.onclick = () => setKey(1);
+
+function onKeyDownClick(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  setKey(-1);
+}
+function onKeyUpClick(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  setKey(1);
+}
+if (keyDownBtn) keyDownBtn.addEventListener("click", onKeyDownClick);
+if (keyUpBtn) keyUpBtn.addEventListener("click", onKeyUpClick);
 chordPrev.onclick = () => {
   if (activeChordIdx > 0) seekToChord(activeChordIdx - 1);
 };
@@ -638,5 +754,9 @@ preview.addEventListener("timeupdate", () => {
 
 applySong(BOOT);
 syncKeyUI();
+// After applySong may have set originalChords — then detect key
+if (BOOT.chords && BOOT.chords.length) {
+  originalChords = collapseChordChanges(BOOT.chords);
+}
 ensureKeyDetected();
 if (BOOT.chords && BOOT.chords.length) startChordSync();

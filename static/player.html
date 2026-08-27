@@ -2,44 +2,97 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d12" />
   <title>Practice Player</title>
   <link rel="stylesheet" href="/static/app.css" />
 </head>
 <body>
   <div class="wrap">
     <div class="player-top">
-      <button type="button" class="ghost" id="homeBtn">← Home</button>
-      <a class="ghost" id="hubLink" href="#" style="display:none">Song hub</a>
+      <div class="player-nav">
+        <button type="button" class="ghost" id="homeBtn">← Home</button>
+        <a class="ghost" id="hubLink" href="#" style="display:none">Song hub</a>
+      </div>
       <h1 id="title">Practice player</h1>
       <div class="transport">
-        <button class="primary" id="playBtn" type="button">Play</button>
-        <button id="stopBtn" type="button">Stop</button>
-        <label class="speed-wrap">
-          <span>Speed</span>
-          <select id="speedSel" title="Playback speed">
-            <option value="0.5">0.5×</option>
-            <option value="0.75">0.75×</option>
-            <option value="0.85">0.85×</option>
-            <option value="1" selected>1×</option>
-            <option value="1.25">1.25×</option>
-            <option value="1.5">1.5×</option>
-          </select>
-        </label>
-        <button type="button" id="hqSpeedBtn" class="hq-toggle" title="Off = instant browser slowdown. On = Rubber Band HQ (first time may take a while)">HQ speed: Off</button>
-        <div class="key-wrap" title="Transpose while playing. Shows song key name when known.">
-          <span>Key</span>
-          <button type="button" id="keyDownBtn" aria-label="Lower key">−</button>
-          <span class="key-val" id="keyVal">—</span>
-          <button type="button" id="keyUpBtn" aria-label="Raise key">+</button>
+        <div class="transport-primary">
+          <button class="primary" id="playBtn" type="button">Play</button>
+          <button id="stopBtn" type="button">Stop</button>
+          <label class="speed-wrap">
+            <span>Speed</span>
+            <select id="speedSel" title="Playback speed">
+              <option value="0.5">0.5×</option>
+              <option value="0.75">0.75×</option>
+              <option value="0.85">0.85×</option>
+              <option value="1" selected>1×</option>
+              <option value="1.25">1.25×</option>
+              <option value="1.5">1.5×</option>
+            </select>
+          </label>
+          <div class="key-wrap" title="Transpose while playing. Shows song key name when known.">
+            <span>Key</span>
+            <button type="button" id="keyDownBtn" aria-label="Lower key">−</button>
+            <span class="key-val" id="keyVal">—</span>
+            <button type="button" id="keyUpBtn" aria-label="Raise key">+</button>
+          </div>
         </div>
-        <button id="resetBtn" type="button">Reset mix</button>
-        <button id="downloadBtn" type="button" title="Download current mix as MP3">Download mix</button>
-        <button id="downloadStemsBtn" type="button" title="Download all stems as a ZIP folder">Download stems</button>
+        <div class="transport-secondary">
+          <button type="button" id="hqSpeedBtn" class="hq-toggle" title="Off = instant browser slowdown. On = Rubber Band HQ (first time may take a while)">HQ speed: Off</button>
+          <button type="button" id="metroBtn" class="hq-toggle" title="Click track locked to song BPM">Metronome: Off</button>
+          <button type="button" id="metroSettingsBtn" title="Metronome volume, sound, meter">Metro settings</button>
+          <span class="metro-bpm" id="metroBpm" title="Detected tempo">— BPM</span>
+          <label class="speed-wrap" title="Used when running stem separation">
+            <span>Device</span>
+            <select id="deviceSel">
+              <option value="auto">Auto</option>
+              <option value="cpu">CPU</option>
+            </select>
+          </label>
+          <button id="resetBtn" type="button">Reset mix</button>
+          <button id="downloadBtn" type="button" title="Download current mix as MP3">Download mix</button>
+          <button id="downloadStemsBtn" type="button" title="Download all stems as a ZIP folder">Download stems</button>
+        </div>
       </div>
     </div>
 
     <div class="card">
+      <div class="metro-panel" id="metroPanel" hidden>
+        <div class="metro-panel-head">
+          <strong>Metronome settings</strong>
+          <button type="button" class="ghost" id="metroPanelClose">Close</button>
+        </div>
+        <div class="metro-panel-grid">
+          <label class="metro-field">
+            <span>Volume</span>
+            <input type="range" id="metroVol" min="0" max="1" step="0.05" value="0.85" />
+            <span class="metro-val" id="metroVolVal">85%</span>
+          </label>
+          <label class="metro-field">
+            <span>Sound</span>
+            <select id="metroSound">
+              <option value="beep">Beep (loud)</option>
+              <option value="wood" selected>Wood block</option>
+              <option value="tick">Tick</option>
+            </select>
+          </label>
+          <label class="metro-field">
+            <span>Meter</span>
+            <select id="meterSel">
+              <option value="4">4/4</option>
+              <option value="3">3/4</option>
+              <option value="2">2/4</option>
+              <option value="6">6/8</option>
+            </select>
+          </label>
+          <label class="metro-field metro-check">
+            <input type="checkbox" id="metroAccent" checked />
+            <span>Accent downbeat</span>
+          </label>
+          <button type="button" id="metroTestBtn" title="Play a sample click">Test click</button>
+        </div>
+      </div>
+
       <div class="seek-row">
         <span class="time" id="tCur">0:00</span>
         <input type="range" id="seek" min="0" max="1000" value="0" step="1" />
@@ -96,10 +149,45 @@
     const keyDownBtn = document.getElementById("keyDownBtn");
     const keyUpBtn = document.getElementById("keyUpBtn");
     const keyVal = document.getElementById("keyVal");
+    const metroBtn = document.getElementById("metroBtn");
+    const metroSettingsBtn = document.getElementById("metroSettingsBtn");
+    const metroPanel = document.getElementById("metroPanel");
+    const metroPanelClose = document.getElementById("metroPanelClose");
+    const meterSel = document.getElementById("meterSel");
+    const metroBpmEl = document.getElementById("metroBpm");
+    const metroVol = document.getElementById("metroVol");
+    const metroVolVal = document.getElementById("metroVolVal");
+    const metroSound = document.getElementById("metroSound");
+    const metroAccent = document.getElementById("metroAccent");
+    const metroTestBtn = document.getElementById("metroTestBtn");
+    const deviceSel = document.getElementById("deviceSel");
     const seekEl = document.getElementById("seek");
     const tCur = document.getElementById("tCur");
     const tDur = document.getElementById("tDur");
     const statusEl = document.getElementById("status");
+
+    let metroOn = false;
+    let metroTimer = null;
+    let metroLastBeat = -1;
+    let metroCtx = null;
+    let metroVolume = 0.85;
+    let metroSoundStyle = "wood";
+    let metroAccentOn = true;
+    let songBpm = Number(BOOT.bpm) || 0;
+    let beat0 = Number((BOOT.bpm_meta && BOOT.bpm_meta.beat_0) || 0) || 0;
+    let beatsPerBar = Number(BOOT.beats_per_bar) || 4;
+    if (BOOT.time_signature === "6/8") beatsPerBar = 6;
+    else if (BOOT.time_signature === "3/4") beatsPerBar = 3;
+    else if (BOOT.time_signature === "2/4") beatsPerBar = 2;
+
+    try {
+      const savedVol = localStorage.getItem("metroVolume");
+      if (savedVol != null) metroVolume = Math.max(0, Math.min(1, parseFloat(savedVol)));
+      const savedSound = localStorage.getItem("metroSound");
+      if (savedSound === "beep" || savedSound === "wood" || savedSound === "tick") metroSoundStyle = savedSound;
+      const savedAccent = localStorage.getItem("metroAccent");
+      if (savedAccent === "0" || savedAccent === "1") metroAccentOn = savedAccent === "1";
+    } catch (_) {}
 
     function fmtKeyOffset(n) {
       if (n === 0) return "0";
@@ -146,6 +234,203 @@
       // Keep −/+ usable while playing; only lock at range edges
       if (keyDownBtn) keyDownBtn.disabled = keySemitones <= -MAX_KEY;
       if (keyUpBtn) keyUpBtn.disabled = keySemitones >= MAX_KEY;
+    }
+
+    function syncMetroUI() {
+      if (meterSel) {
+        meterSel.value = String(beatsPerBar);
+        meterSel.disabled = !songBpm;
+      }
+      if (metroVol) metroVol.value = String(metroVolume);
+      if (metroVolVal) metroVolVal.textContent = Math.round(metroVolume * 100) + "%";
+      if (metroSound) metroSound.value = metroSoundStyle;
+      if (metroAccent) metroAccent.checked = metroAccentOn;
+      if (metroBpmEl) {
+        const meterLabel =
+          beatsPerBar === 6 ? "6/8" : beatsPerBar === 3 ? "3/4" : beatsPerBar === 2 ? "2/4" : "4/4";
+        metroBpmEl.textContent = songBpm
+          ? songBpm + " BPM · " + meterLabel
+          : "No BPM — run Detect BPM on song hub";
+      }
+      if (metroBtn) {
+        metroBtn.classList.toggle("on", metroOn);
+        metroBtn.textContent = metroOn ? "Metronome: On" : "Metronome: Off";
+        metroBtn.disabled = !songBpm;
+        metroBtn.title = songBpm
+          ? "Click track locked to song BPM (" + songBpm + ")"
+          : "Run Detect BPM on the song hub first";
+      }
+      if (metroSettingsBtn) {
+        metroSettingsBtn.classList.toggle("on", metroPanel && !metroPanel.hidden);
+        metroSettingsBtn.disabled = false;
+      }
+    }
+
+    function setMetroPanelOpen(open) {
+      if (!metroPanel) return;
+      metroPanel.hidden = !open;
+      syncMetroUI();
+    }
+
+    function ensureMetroCtx() {
+      if (!metroCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        metroCtx = new AC();
+      }
+      if (metroCtx.state === "suspended") metroCtx.resume().catch(() => {});
+      return metroCtx;
+    }
+
+    function playMetroClick(isDownbeat) {
+      const ctx = ensureMetroCtx();
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const vol = Math.max(0, Math.min(1, metroVolume));
+      if (vol < 0.01) return;
+      const accent = isDownbeat && metroAccentOn;
+      const peak = vol * (accent ? 1.0 : 0.72);
+
+      if (metroSoundStyle === "wood") {
+        // Noise burst + short tone = louder wood-block feel
+        const dur = accent ? 0.09 : 0.07;
+        const bufLen = Math.floor(ctx.sampleRate * dur);
+        const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) {
+          const env = Math.exp(-i / (ctx.sampleRate * (accent ? 0.018 : 0.012)));
+          data[i] = (Math.random() * 2 - 1) * env;
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buf;
+        const bp = ctx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.value = accent ? 1800 : 1200;
+        bp.Q.value = 2.2;
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(peak * 1.35, t0);
+        ng.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+        noise.connect(bp);
+        bp.connect(ng);
+        ng.connect(ctx.destination);
+        noise.start(t0);
+        noise.stop(t0 + dur);
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.value = accent ? 880 : 660;
+        gain.gain.setValueAtTime(peak * 0.55, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.05);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + 0.06);
+        return;
+      }
+
+      if (metroSoundStyle === "tick") {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(accent ? 2200 : 1600, t0);
+        osc.frequency.exponentialRampToValueAtTime(accent ? 900 : 700, t0 + 0.03);
+        gain.gain.setValueAtTime(peak, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.04);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + 0.05);
+        return;
+      }
+
+      // beep — loud square click
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.value = accent ? 1400 : 980;
+      gain.gain.setValueAtTime(peak, t0);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + (accent ? 0.08 : 0.055));
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.09);
+    }
+
+    function metroMediaBeatIndex(mediaT) {
+      if (!(songBpm > 0)) return -1;
+      const beatDur = 60 / songBpm;
+      const rel = mediaT - beat0;
+      if (rel < -beatDur * 0.25) return -1;
+      return Math.floor((rel + 1e-6) / beatDur);
+    }
+
+    function metroPoll() {
+      if (!metroOn || !playing || !(songBpm > 0)) return;
+      const a = masterAudio();
+      if (!a) return;
+      const idx = metroMediaBeatIndex(a.currentTime || 0);
+      if (idx < 0 || idx === metroLastBeat) return;
+      metroLastBeat = idx;
+      const inBar = idx % beatsPerBar;
+      // 6/8: accent 1 and 4 (indices 0 and 3)
+      const down = inBar === 0 || (beatsPerBar === 6 && inBar === 3);
+      playMetroClick(down);
+    }
+
+    function startMetro() {
+      stopMetroPoll();
+      metroLastBeat = -1;
+      if (!metroOn || !(songBpm > 0)) return;
+      ensureMetroCtx();
+      metroTimer = setInterval(metroPoll, 25);
+    }
+
+    function stopMetroPoll() {
+      if (metroTimer) clearInterval(metroTimer);
+      metroTimer = null;
+    }
+
+    function toggleMetro() {
+      if (!songBpm) {
+        setStatus("Detect BPM on the song hub first, then reopen the mixer.");
+        return;
+      }
+      metroOn = !metroOn;
+      syncMetroUI();
+      if (metroOn && playing) startMetro();
+      else stopMetroPoll();
+      setStatus(metroOn ? "Metronome on · " + songBpm + " BPM" : "Metronome off");
+    }
+
+    function onMeterChange() {
+      beatsPerBar = parseInt(meterSel.value, 10) || 4;
+      metroLastBeat = -1;
+      syncMetroUI();
+    }
+
+    function saveMetroPrefs() {
+      try {
+        localStorage.setItem("metroVolume", String(metroVolume));
+        localStorage.setItem("metroSound", metroSoundStyle);
+        localStorage.setItem("metroAccent", metroAccentOn ? "1" : "0");
+      } catch (_) {}
+    }
+
+    function onMetroVolInput() {
+      metroVolume = parseFloat(metroVol.value) || 0;
+      if (metroVolVal) metroVolVal.textContent = Math.round(metroVolume * 100) + "%";
+      saveMetroPrefs();
+    }
+
+    function onMetroSoundChange() {
+      metroSoundStyle = metroSound.value || "wood";
+      saveMetroPrefs();
+    }
+
+    function onMetroAccentChange() {
+      metroAccentOn = !!metroAccent.checked;
+      saveMetroPrefs();
     }
 
     function setTransformBusy(busy) {
@@ -552,6 +837,7 @@
       if (syncTimer) clearInterval(syncTimer);
       if (uiTimer) clearInterval(uiTimer);
       syncTimer = uiTimer = null;
+      stopMetroPoll();
     }
 
     function startTimers() {
@@ -568,6 +854,7 @@
         }
       }, 400);
       uiTimer = setInterval(updateSeekUI, 200);
+      if (metroOn) startMetro();
     }
 
     function updateSeekUI() {
@@ -628,6 +915,7 @@
       if (!(dur > 0)) return;
       const t = Math.max(0, Math.min(dur, ratio * dur));
       for (const tr of Object.values(tracks)) tr.audio.currentTime = t;
+      metroLastBeat = -1;
       updateSeekUI();
     }
 
@@ -741,6 +1029,7 @@
       if (hqSpeedBtn) hqSpeedBtn.disabled = false;
       syncHqButton();
       syncKeyUI();
+      syncMetroUI();
       applyRate();
       render();
       applyAudibility();
@@ -774,6 +1063,59 @@
     if (hqSpeedBtn) hqSpeedBtn.onclick = toggleHqSpeed;
     if (keyDownBtn) keyDownBtn.onclick = () => setKey(-1);
     if (keyUpBtn) keyUpBtn.onclick = () => setKey(1);
+    if (metroBtn) metroBtn.onclick = toggleMetro;
+    if (metroSettingsBtn) {
+      metroSettingsBtn.onclick = () => {
+        const open = metroPanel && metroPanel.hidden;
+        setMetroPanelOpen(!!open);
+      };
+    }
+    if (metroPanelClose) metroPanelClose.onclick = () => setMetroPanelOpen(false);
+    if (meterSel) {
+      if (beatsPerBar) meterSel.value = String(beatsPerBar);
+      meterSel.onchange = onMeterChange;
+    }
+    if (metroVol) {
+      metroVol.value = String(metroVolume);
+      metroVol.oninput = onMetroVolInput;
+    }
+    if (metroSound) {
+      metroSound.value = metroSoundStyle;
+      metroSound.onchange = onMetroSoundChange;
+    }
+    if (metroAccent) {
+      metroAccent.checked = metroAccentOn;
+      metroAccent.onchange = onMetroAccentChange;
+    }
+    if (metroTestBtn) {
+      metroTestBtn.onclick = () => {
+        playMetroClick(true);
+        setTimeout(() => playMetroClick(false), 220);
+      };
+    }
+    syncMetroUI();
+    if (deviceSel) {
+      try {
+        const saved = localStorage.getItem("practiceDevice");
+        if (saved === "cpu" || saved === "auto") deviceSel.value = saved;
+      } catch (_) {}
+      deviceSel.onchange = () => {
+        try {
+          localStorage.setItem("practiceDevice", deviceSel.value);
+        } catch (_) {}
+        setStatus("Stem device preference: " + deviceSel.value + " (used next time you run stems).");
+      };
+      // Show detected compute
+      fetch("/api/device")
+        .then((r) => r.json())
+        .then((d) => {
+          if (d && d.label) {
+            const opt = deviceSel.querySelector('option[value="auto"]');
+            if (opt) opt.textContent = "Auto (" + d.label + ")";
+          }
+        })
+        .catch(() => {});
+    }
     document.getElementById("homeBtn").onclick = teardownAndGoHome;
 
     seekEl.addEventListener("pointerdown", () => { seeking = true; });
