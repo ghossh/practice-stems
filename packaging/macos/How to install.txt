@@ -1,0 +1,16 @@
+Practice Stems — Mac install (Apple Silicon only: M1 / M2 / M3 / M4)
+
+1. Open the .dmg, drag “Practice Stems” into the Applications folder.
+2. Open Applications, right-click Practice Stems, choose Open.
+   (First launch: macOS may say the app is unsigned. Confirm Open.)
+3. The first launch unpacks the runtime (a few minutes, one time).
+4. A browser tab opens at http://127.0.0.1:7860
+5. Quit from the Dock icon when you are done.
+
+Songs are stored in:
+  ~/Library/Application Support/Practice Stems
+
+Log file (if something fails):
+  ~/Library/Logs/Practice Stems.log
+
+Needs internet for YouTube downloads. Stem split uses the Apple GPU when available.

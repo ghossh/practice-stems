@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d12" />
+  <title>Loopz · Practice Stems</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="player-top">
+      <div class="player-nav">
+        <a class="ghost" href="/">← Home</a>
+      </div>
+      <div class="loopz-hero-row">
+        <h1>Loopz</h1>
+        <p class="loopz-sub">Drum loops + piano/bass chords. Change tempo, volume, and key while you solo.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="loopz-now">
+        <span class="loopz-now-name" id="nowName">Rock Straight</span>
+        <span class="loopz-now-meta" id="nowMeta">Rock · 4/4</span>
+      </div>
+
+      <div class="tempo-hero">
+        <div class="bpm-readout">
+          <span class="bpm-num" id="bpmNum">110</span>
+          <span class="bpm-lab">BPM</span>
+        </div>
+        <div class="tempo-slider-wrap">
+          <input type="range" id="tempo" min="40" max="220" step="1" value="110" />
+          <div class="tempo-hint"><span>40</span><span>Tap or drag</span><span>220</span></div>
+        </div>
+        <div class="tempo-btns">
+          <button type="button" id="bpmUp" title="Faster">+5</button>
+          <button type="button" id="bpmDown" title="Slower">−5</button>
+        </div>
+      </div>
+
+      <div class="loopz-vols">
+        <label class="loopz-vol">
+          <span>Drums</span>
+          <input type="range" id="loopVol" min="0" max="1" step="0.01" value="0.85" />
+          <span class="vol" id="loopVolVal">85%</span>
+        </label>
+        <label class="loopz-vol">
+          <span>Metro</span>
+          <input type="range" id="metroVol" min="0" max="1" step="0.01" value="0.7" />
+          <span class="vol" id="metroVolVal">70%</span>
+        </label>
+        <label class="loopz-vol">
+          <span>Piano</span>
+          <input type="range" id="pianoVol" min="0" max="1" step="0.01" value="0.7" />
+          <span class="vol" id="pianoVolVal">70%</span>
+        </label>
+        <label class="loopz-vol">
+          <span>Bass</span>
+          <input type="range" id="bassVol" min="0" max="1" step="0.01" value="0.8" />
+          <span class="vol" id="bassVolVal">80%</span>
+        </label>
+      </div>
+
+      <div class="beat-strip" id="beatStrip" aria-hidden="true"></div>
+
+      <div class="loopz-transport">
+        <button class="primary" type="button" id="playBtn">Play</button>
+        <button type="button" id="stopBtn">Stop</button>
+        <button type="button" id="tapBtn" title="Tap a few times to set tempo">Tap tempo</button>
+        <button type="button" id="metroBtn" class="hq-toggle">Metronome: Off</button>
+      </div>
+      <div class="loopz-checks">
+        <label><input type="checkbox" id="countIn" /> Count-in (1 bar)</label>
+        <label><input type="checkbox" id="keepTempo" /> Keep tempo when switching loops</label>
+        <label>
+          <span>Meter</span>
+          <select id="meterSel">
+            <option value="4" selected>4/4</option>
+            <option value="3">3/4</option>
+            <option value="2">2/4</option>
+            <option value="6">6/8</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="card jam-card" style="margin-top: 18px;">
+      <div class="library-head">
+        <h2>Jam chords</h2>
+        <label class="jam-toggle">
+          <input type="checkbox" id="jamOn" checked />
+          Piano + bass
+        </label>
+      </div>
+      <p class="section-sub" style="margin-top:0">Solo over piano and bass — not another guitar. Transpose to any key.</p>
+
+      <div class="jam-now-row">
+        <div class="jam-now-wrap">
+          <div class="jam-now" id="jamNow">Am</div>
+          <div class="jam-now-meta" id="jamNowMeta">Bar 1 / 4</div>
+        </div>
+        <div class="jam-next-col">
+          <span class="jam-next-lab">Next</span>
+          <span class="jam-next" id="jamNext">F</span>
+        </div>
+        <div class="key-wrap jam-key" title="Transpose the whole progression">
+          <span>Key</span>
+          <button type="button" id="jamDown" aria-label="Lower key">−</button>
+          <span class="key-val" id="jamKeyVal">0</span>
+          <button type="button" id="jamUp" aria-label="Raise key">+</button>
+        </div>
+      </div>
+
+      <div class="jam-prog-row" id="jamChips"></div>
+
+      <div class="jam-edit">
+        <label for="jamProg">Progression</label>
+        <input id="jamProg" type="text" spellcheck="false" autocomplete="off"
+          value="Am F C G" placeholder="Am F C G" />
+        <button type="button" id="jamApply">Apply</button>
+      </div>
+      <div class="loopz-filters" id="jamPresets"></div>
+    </div>
+
+    <div class="card" style="margin-top: 18px;">
+      <div class="library-head">
+        <h2>Loops</h2>
+      </div>
+      <div class="loopz-filters" id="filters"></div>
+      <div class="loop-grid" id="loopGrid"></div>
+    </div>
+
+    <div class="card" style="margin-top: 18px;">
+      <div class="library-head">
+        <h2>Drum mix</h2>
+      </div>
+      <p class="section-sub" style="margin-top:0">Mute a part and play it yourself. Volume is independent of the master loop fader.</p>
+      <div class="loopz-drums" id="drumMix"></div>
+    </div>
+    <p class="footer-note">Acoustic kit from Virtuosity Drums (CC0). Not affiliated with the Loopz Android app.</p>
+  </div>
+  <script src="/static/loopz.js"></script>
+</body>
+</html>

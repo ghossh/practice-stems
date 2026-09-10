@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import os
 import re
+import secrets
 import shutil
 import subprocess
 import threading
 import traceback
 import uuid
+import webbrowser
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
@@ -16,6 +21,9 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 from pipeline.device import device_label, pick_device
 from pipeline.download import download_audio
@@ -68,8 +76,60 @@ class PitchBody(BaseModel):
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
-HOST = __import__("os").environ.get("HOST", "127.0.0.1")
-PORT = int(__import__("os").environ.get("PORT", "7860"))
+
+
+def _load_dotenv() -> None:
+    """Load ROOT/.env into os.environ (does not override existing vars)."""
+    path = ROOT / ".env"
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        val = val.strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+            val = val[1:-1]
+        os.environ[key] = val
+
+
+_load_dotenv()
+HOST = os.environ.get("HOST", "127.0.0.1")
+PORT = int(os.environ.get("PORT", "7860"))
+APP_USER = os.environ.get("APP_USER", "admin").strip() or "admin"
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
+
+
+def _basic_auth_ok(request: Request) -> bool:
+    if not APP_PASSWORD:
+        return True
+    header = request.headers.get("authorization", "")
+    if not header.lower().startswith("basic "):
+        return False
+    try:
+        raw = base64.b64decode(header.split(" ", 1)[1].encode()).decode("utf-8")
+        user, _, password = raw.partition(":")
+        return secrets.compare_digest(user, APP_USER) and secrets.compare_digest(
+            password, APP_PASSWORD
+        )
+    except Exception:
+        return False
+
+
+class BasicAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if _basic_auth_ok(request):
+            return await call_next(request)
+        return Response(
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="Practice Stems"'},
+            content="Authentication required",
+            media_type="text/plain",
+        )
 
 _jobs_lock = threading.Lock()
 _jobs: dict[str, dict] = {}
@@ -206,12 +266,25 @@ def _run_separate_existing(task_id: str, job_id: str, device_choice: str) -> Non
     _run_separate(task_id, wav, title, device_choice)
 
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    if os.environ.get("PRACTICE_STEMS_OPEN_BROWSER") == "1":
+        webbrowser.open(f"http://{HOST}:{PORT}")
+    yield
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="Practice Stems")
+    app = FastAPI(title="Practice Stems", lifespan=_lifespan)
+    if APP_PASSWORD:
+        app.add_middleware(BasicAuthMiddleware)
 
     @app.get("/", response_class=HTMLResponse)
     async def home():
         return HTMLResponse((STATIC / "index.html").read_text(encoding="utf-8"))
+
+    @app.get("/loopz", response_class=HTMLResponse)
+    async def loopz():
+        return HTMLResponse((STATIC / "loopz.html").read_text(encoding="utf-8"))
 
     @app.get("/song/{job_id}", response_class=HTMLResponse)
     async def song_hub(job_id: str):
@@ -692,6 +765,8 @@ app = create_app()
 
 def main() -> None:
     print(f"Practice Stems → http://{HOST}:{PORT}")
+    if APP_PASSWORD:
+        print(f"Password protection on (user: {APP_USER})")
     uvicorn.run(app, host=HOST, port=PORT, log_level="info")
 
 

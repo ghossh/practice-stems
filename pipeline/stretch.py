@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import re
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
+from .encode import MP3_BITRATE
 from .jobs import PLAY, STEM_ORDER
 
 MAX_SEMITONES = 6
@@ -71,7 +71,7 @@ def _ffmpeg_to_wav(src: Path, wav: Path) -> None:
     )
 
 
-def _ffmpeg_wav_to_mp3(wav: Path, mp3: Path, bitrate: str = "192k") -> None:
+def _ffmpeg_wav_to_mp3(wav: Path, mp3: Path, bitrate: str = MP3_BITRATE) -> None:
     subprocess.run(
         [
             "ffmpeg",
@@ -181,7 +181,7 @@ def transform_file(src: Path, dest: Path, speed: float = 1.0, semitones: int = 0
             "-codec:a",
             "libmp3lame",
             "-b:a",
-            "192k",
+            MP3_BITRATE,
             str(dest),
         ],
         capture_output=True,

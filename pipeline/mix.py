@@ -7,6 +7,7 @@ import subprocess
 import zipfile
 from pathlib import Path
 
+from .encode import MP3_BITRATE
 from .jobs import PLAY, STEM_ORDER, read_job_meta
 from .stretch import stretch_file
 
@@ -131,7 +132,7 @@ def export_mix(
             "-codec:a",
             "libmp3lame",
             "-b:a",
-            "192k",
+            MP3_BITRATE,
             str(out_path),
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -152,7 +153,7 @@ def export_mix(
         "-codec:a",
         "libmp3lame",
         "-b:a",
-        "192k",
+        MP3_BITRATE,
         str(with_temp),
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True)

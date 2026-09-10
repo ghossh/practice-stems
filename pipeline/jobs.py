@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -11,7 +12,14 @@ from .encode import encode_stems_mp3
 from .separate import STEM_ORDER
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "data"
+
+
+def _data_root() -> Path:
+    override = os.environ.get("PRACTICE_STEMS_DATA", "").strip()
+    return Path(override).expanduser().resolve() if override else ROOT / "data"
+
+
+DATA = _data_root()
 PLAY = DATA / "play"
 INCOMING = DATA / "_incoming"
 
@@ -32,6 +40,23 @@ def find_stem_wavs(stems_dir: Path) -> dict[str, Path]:
         if wav.exists():
             found[name] = wav
     return found
+
+
+def stem_wavs_for_job(job_id: str) -> dict[str, Path]:
+    """Locate separated stem WAVs for a job (incoming or meta stems_dir)."""
+    meta = read_job_meta(job_id) or {}
+    candidates: list[Path] = []
+    stems_dir = meta.get("stems_dir")
+    if stems_dir:
+        candidates.append(Path(stems_dir))
+    candidates.append(INCOMING / job_id / "stems")
+    for directory in candidates:
+        if not directory.is_dir():
+            continue
+        wavs = find_stem_wavs(directory)
+        if len(wavs) >= 4:
+            return wavs
+    return {}
 
 
 def latest_stems_dir() -> Path | None:
@@ -99,19 +124,52 @@ def source_wav_path(job_id: str) -> Path | None:
     return None
 
 
-def ensure_source_mp3(job_id: str) -> Path | None:
+def ensure_source_mp3(job_id: str, *, force: bool = False) -> Path | None:
     """Ensure play/<id>/source.mp3 exists for hub playback."""
     from .encode import wav_to_mp3
 
     play_dir = PLAY / job_id
     play_dir.mkdir(parents=True, exist_ok=True)
     mp3 = play_dir / "source.mp3"
-    if mp3.is_file():
-        return mp3
     wav = source_wav_path(job_id)
     if not wav:
-        return None
-    return wav_to_mp3(wav, mp3)
+        return mp3 if mp3.is_file() else None
+    if force or not mp3.is_file():
+        return wav_to_mp3(wav, mp3)
+    return mp3
+
+
+def reencode_job_mp3s(job_id: str) -> dict[str, int]:
+    """Re-encode source + stem MP3s at the current default bitrate. Returns counts."""
+    from .encode import encode_stems_mp3, wav_to_mp3
+
+    play_dir = PLAY / job_id
+    if not play_dir.is_dir():
+        raise FileNotFoundError(f"job not found: {job_id}")
+
+    stems_done = 0
+    source_done = 0
+
+    for sub in ("xform", "stretch"):
+        d = play_dir / sub
+        if d.is_dir():
+            shutil.rmtree(d)
+
+    stem_wavs = stem_wavs_for_job(job_id)
+    if stem_wavs:
+        for name in stem_wavs:
+            mp3 = play_dir / f"{name}.mp3"
+            if mp3.is_file():
+                mp3.unlink()
+        encode_stems_mp3(stem_wavs, out_dir=play_dir)
+        stems_done = len(stem_wavs)
+
+    wav = source_wav_path(job_id)
+    if wav:
+        wav_to_mp3(wav, play_dir / "source.mp3")
+        source_done = 1
+
+    return {"stems": stems_done, "source": source_done}
 
 
 def stage_opened_song(title: str, source_wav: Path) -> str:
@@ -156,7 +214,7 @@ def song_summary(job_id: str, *, ensure_source: bool = True) -> dict | None:
         "job_id": job_id,
         "title": meta.get("title") or job_id.replace("_", " "),
         "hub_url": f"/song/{job_id}",
-        "player_url": f"/player/{job_id}" if len(stems) >= 4 else None,
+        "player_url": f"/player/{job_id}",
         "source_url": f"/media/{job_id}/source.mp3" if has_source else None,
         "stem_count": len(stems),
         "has_stems": len(stems) >= 4,

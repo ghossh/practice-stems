@@ -13,11 +13,25 @@ data/
 *.flac
 *.m4a
 *.webm
+!static/loopz/
+!static/loopz/**/
+!static/loopz/kit/*.mp3
+# Vendored Loopz acoustic kit (CC0)
+!static/loopz/kit/
+!static/loopz/kit/*.mp3
+
+# Secrets
+.env
 
 # OS / IDE
 .DS_Store
 .idea/
 .vscode/
+
+# macOS package build
+dist/
+*.dmg
+*.app
 
 # Docker
 *.log

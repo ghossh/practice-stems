@@ -40,7 +40,31 @@ pip install -r requirements.txt
 
 Open http://127.0.0.1:7860
 
-Needs: network for YouTube + first model download. For HQ slowdown: `brew install rubberband` (CLI on PATH).
+Needs: network for YouTube + first model download. For HQ slowdown: `brew install rubberband` (CLI on PATH). The `.app` build bundles rubberband for you.
+
+---
+
+## Option C — macOS .app (another Apple Silicon Mac)
+
+On **this** Mac (Apple Silicon, with the conda env already working):
+
+```bash
+./scripts/build_macos_app.sh
+```
+
+That writes:
+
+- `dist/Practice Stems.app` — double-click to run locally
+- `dist/PracticeStems-macos-arm64.dmg` — send this file to the other computer
+
+On the **other** Mac (M1/M2/M3/M4 only):
+
+1. Open the `.dmg`, drag **Practice Stems** into **Applications**.
+2. Right-click the app → **Open** (first time only; it is unsigned).
+3. A browser tab opens at http://127.0.0.1:7860 — quit from the Dock icon.
+   The first launch unpacks the runtime (a few minutes, once).
+
+Songs live in `~/Library/Application Support/Practice Stems`. This build does **not** run on Intel Macs.
 
 ---
 

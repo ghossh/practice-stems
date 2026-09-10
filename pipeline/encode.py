@@ -5,8 +5,10 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+MP3_BITRATE = "96k"
 
-def wav_to_mp3(wav_path: Path, mp3_path: Path | None = None, bitrate: str = "192k") -> Path:
+
+def wav_to_mp3(wav_path: Path, mp3_path: Path | None = None, bitrate: str = MP3_BITRATE) -> Path:
     mp3_path = mp3_path or wav_path.with_suffix(".mp3")
     mp3_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
