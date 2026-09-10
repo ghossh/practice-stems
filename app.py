@@ -18,7 +18,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -47,6 +47,7 @@ from pipeline.jobs import (
     touch_played,
 )
 from pipeline.mix import export_mix, export_stems_zip
+from pipeline.recordings import delete_recording, list_recordings, recording_path, save_recording
 from pipeline.separate import STEM_ORDER, separate_stems
 from pipeline.stretch import (
     MAX_SEMITONES,
@@ -248,6 +249,7 @@ def _run_open(task_id: str, source_wav: Path, title: str) -> None:
             job_id=job_id,
             title=title,
             hub_url=f"/song/{job_id}",
+            player_url=f"/player/{job_id}",
         )
     except Exception as exc:
         if str(exc) == "Cancelled" or _is_cancelled(task_id):
@@ -286,8 +288,14 @@ def create_app() -> FastAPI:
     async def loopz():
         return HTMLResponse((STATIC / "loopz.html").read_text(encoding="utf-8"))
 
-    @app.get("/song/{job_id}", response_class=HTMLResponse)
+    @app.get("/song/{job_id}")
     async def song_hub(job_id: str):
+        if not re.fullmatch(r"[A-Za-z0-9_\-]+", job_id):
+            raise HTTPException(400, "bad job id")
+        return RedirectResponse(f"/player/{job_id}", status_code=302)
+
+    @app.get("/player/{job_id}", response_class=HTMLResponse)
+    async def player(job_id: str):
         if not re.fullmatch(r"[A-Za-z0-9_\-]+", job_id):
             raise HTTPException(400, "bad job id")
         summary = song_summary(job_id, ensure_source=True)
@@ -295,35 +303,12 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "song not found")
         touch_played(job_id)
         summary = song_summary(job_id, ensure_source=False) or summary
-        html = (STATIC / "song.html").read_text(encoding="utf-8")
-        boot_json = json.dumps(summary).replace("<", "\\u003c")
-        return HTMLResponse(html.replace("__BOOT_JSON__", boot_json))
-
-    @app.get("/player/{job_id}", response_class=HTMLResponse)
-    async def player(job_id: str):
-        if not re.fullmatch(r"[A-Za-z0-9_\-]+", job_id):
-            raise HTTPException(400, "bad job id")
-        if not (PLAY / job_id).is_dir():
-            raise HTTPException(404, "job not found")
-        stems = list_playable_stems(job_id)
-        if len(stems) < 4:
-            raise HTTPException(404, "stems not ready — run Stem separation from the song hub")
-        touch_played(job_id)
-        meta = read_job_meta(job_id) or {"job_id": job_id, "title": job_id.replace("_", " ")}
+        stems = list_playable_stems(job_id) if summary.get("has_stems") else {}
         boot = {
-            "job_id": job_id,
-            "title": meta.get("title") or job_id,
+            **summary,
             "stems": stems,
             "stem_order": STEM_ORDER,
-            "hub_url": f"/song/{job_id}",
-            "key": meta.get("key"),
-            "key_meta": meta.get("key_meta"),
-            "bpm": meta.get("bpm"),
-            "bpm_meta": meta.get("bpm_meta"),
-            "time_signature": meta.get("time_signature")
-            or (meta.get("bpm_meta") or {}).get("time_signature"),
-            "beats_per_bar": meta.get("beats_per_bar")
-            or (meta.get("bpm_meta") or {}).get("beats_per_bar"),
+            "recordings": list_recordings(job_id),
         }
         html = (STATIC / "player.html").read_text(encoding="utf-8")
         boot_json = json.dumps(boot).replace("<", "\\u003c")
@@ -605,6 +590,58 @@ def create_app() -> FastAPI:
             filename=path.name,
             headers={"Content-Disposition": f'attachment; filename="{path.name}"'},
         )
+
+    @app.get("/api/jobs/{job_id}/recordings")
+    async def api_list_recordings(job_id: str):
+        if not re.fullmatch(r"[A-Za-z0-9_\-]+", job_id):
+            raise HTTPException(400, "bad job id")
+        if not (PLAY / job_id).is_dir():
+            raise HTTPException(404, "job not found")
+        return {"recordings": list_recordings(job_id)}
+
+    @app.post("/api/jobs/{job_id}/recordings")
+    async def api_save_recording(job_id: str, file: UploadFile = File(...)):
+        if not re.fullmatch(r"[A-Za-z0-9_\-]+", job_id):
+            raise HTTPException(400, "bad job id")
+        if not (PLAY / job_id).is_dir():
+            raise HTTPException(404, "job not found")
+        data = await file.read()
+        try:
+            info = save_recording(job_id, data, file.filename or "")
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(500, f"Save recording failed: {exc}") from exc
+        return info
+
+    @app.get("/api/jobs/{job_id}/recordings/{name}")
+    async def api_get_recording(job_id: str, name: str):
+        if not re.fullmatch(r"[A-Za-z0-9_\-]+", job_id):
+            raise HTTPException(400, "bad job id")
+        try:
+            path = recording_path(job_id, name)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return FileResponse(
+            path,
+            media_type="audio/mpeg",
+            filename=path.name,
+            headers={"Content-Disposition": f'inline; filename="{path.name}"'},
+        )
+
+    @app.delete("/api/jobs/{job_id}/recordings/{name}")
+    async def api_delete_recording(job_id: str, name: str):
+        if not re.fullmatch(r"[A-Za-z0-9_\-]+", job_id):
+            raise HTTPException(400, "bad job id")
+        try:
+            delete_recording(job_id, name)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return {"ok": True}
 
     @app.get("/api/jobs/{job_id}/stems.zip")
     async def api_export_stems_zip(job_id: str):

@@ -12,24 +12,46 @@
     <div class="player-top">
       <div class="player-nav">
         <button type="button" class="ghost" id="homeBtn">← Home</button>
-        <a class="ghost" id="hubLink" href="#" style="display:none">Song hub</a>
+        <div class="more-wrap">
+          <button type="button" class="ghost more-btn" id="moreBtn" aria-label="More" aria-haspopup="true" aria-expanded="false">⋯</button>
+          <div class="more-menu" id="moreMenu" hidden>
+            <button type="button" id="rerunStemsBtn">Rerun stems</button>
+            <label class="more-field" title="Used when running stem separation">
+              <span>Device</span>
+              <select id="deviceSel">
+                <option value="auto">Auto</option>
+                <option value="cpu">CPU</option>
+              </select>
+            </label>
+            <div class="more-sep"></div>
+            <button type="button" id="rerunBeatsBtn">Detect beats</button>
+            <button type="button" id="rerunChordsBtn">Rerun chords</button>
+            <div class="more-sep"></div>
+            <label class="more-field" title="Playback speed">
+              <span>Speed</span>
+              <select id="speedSel">
+                <option value="0.5">0.5×</option>
+                <option value="0.75">0.75×</option>
+                <option value="0.85">0.85×</option>
+                <option value="1" selected>1×</option>
+                <option value="1.25">1.25×</option>
+                <option value="1.5">1.5×</option>
+              </select>
+            </label>
+            <button type="button" id="hqSpeedBtn" class="hq-toggle" title="Off = instant browser slowdown. On = Rubber Band HQ">HQ speed: Off</button>
+          </div>
+        </div>
       </div>
       <h1 id="title">Practice player</h1>
       <div class="transport">
         <div class="transport-primary">
-          <button class="primary" id="playBtn" type="button">Play</button>
-          <button id="stopBtn" type="button">Stop</button>
-          <label class="speed-wrap">
-            <span>Speed</span>
-            <select id="speedSel" title="Playback speed">
-              <option value="0.5">0.5×</option>
-              <option value="0.75">0.75×</option>
-              <option value="0.85">0.85×</option>
-              <option value="1" selected>1×</option>
-              <option value="1.25">1.25×</option>
-              <option value="1.5">1.5×</option>
-            </select>
-          </label>
+          <button class="primary play-btn" id="playBtn" type="button" aria-label="Play" title="Play"></button>
+          <div class="key-wrap bpm-wrap" title="Detected tempo. Use −/+ to nudge BPM.">
+            <span>BPM</span>
+            <button type="button" id="bpmDownBtn" aria-label="Slower">−</button>
+            <span class="key-val" id="bpmVal">—</span>
+            <button type="button" id="bpmUpBtn" aria-label="Faster">+</button>
+          </div>
           <div class="key-wrap" title="Transpose while playing. Shows song key name when known.">
             <span>Key</span>
             <button type="button" id="keyDownBtn" aria-label="Lower key">−</button>
@@ -38,25 +60,75 @@
           </div>
         </div>
         <div class="transport-secondary">
-          <button type="button" id="hqSpeedBtn" class="hq-toggle" title="Off = instant browser slowdown. On = Rubber Band HQ (first time may take a while)">HQ speed: Off</button>
           <button type="button" id="metroBtn" class="hq-toggle" title="Click track locked to song BPM">Metronome: Off</button>
           <button type="button" id="metroSettingsBtn" title="Metronome volume, sound, meter">Metro settings</button>
-          <span class="metro-bpm" id="metroBpm" title="Detected tempo">— BPM</span>
-          <label class="speed-wrap" title="Used when running stem separation">
-            <span>Device</span>
-            <select id="deviceSel">
-              <option value="auto">Auto</option>
-              <option value="cpu">CPU</option>
-            </select>
-          </label>
+          <button type="button" id="detectChordsBtn" title="Detect chord changes">Detect chords</button>
+          <button type="button" id="playChordsBtn" class="hq-toggle" title="Play piano chords along with the song">Play chords: Off</button>
+          <button type="button" id="showChordsBtn" class="hq-toggle" title="Show or hide the chord chart">Show chords</button>
           <button id="resetBtn" type="button">Reset mix</button>
           <button id="downloadBtn" type="button" title="Download current mix as MP3">Download mix</button>
           <button id="downloadStemsBtn" type="button" title="Download all stems as a ZIP folder">Download stems</button>
         </div>
+        <div class="transport-record">
+          <div class="record-wrap">
+            <button type="button" class="record-btn" id="recordBtn" aria-label="Record">● Record</button>
+            <select id="micSel" title="Microphone" aria-label="Microphone">
+              <option value="">Default microphone</option>
+            </select>
+            <label class="rec-gain" title="Microphone level in the take">
+              <span>Mic</span>
+              <input type="range" id="micVol" min="0" max="3" step="0.05" value="1.8" />
+              <span class="rec-gain-val" id="micVolVal">180%</span>
+            </label>
+            <label class="rec-gain" title="Master volume for the song mix">
+              <span>Mix</span>
+              <input type="range" id="masterVol" min="0" max="1.5" step="0.05" value="1" />
+              <span class="rec-gain-val" id="masterVolVal">100%</span>
+            </label>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="card">
+    <div class="card sep-card" id="sepCard" hidden>
+      <h2>Preparing stems</h2>
+      <p class="sep-sub">Splitting the track so you can mute, solo, and practice.</p>
+      <div class="progress on" id="sepProgress">
+        <div class="bar"><span id="sepBar"></span></div>
+        <div class="status" id="sepMsg">Starting…</div>
+      </div>
+    </div>
+
+    <section class="card chord-player" id="chordPlayer" hidden>
+      <div class="chord-player-head">
+        <div>
+          <h2>Chords</h2>
+          <p class="chord-player-sub" id="chordPlayerSub">Play — chords follow along</p>
+        </div>
+        <div class="chord-view-toggle" role="group" aria-label="Chord view">
+          <button type="button" id="viewSlide" class="on">Sliding</button>
+          <button type="button" id="viewSheet">Full sheet</button>
+          <button type="button" id="hideChordsBtn">Hide</button>
+        </div>
+      </div>
+      <div id="chordSlideView">
+        <div class="chord-now-row" id="chordNowRow">
+          <button type="button" class="chord-side" id="chordPrev" title="Previous">—</button>
+          <div class="chord-now-wrap">
+            <div class="chord-now" id="chordNow">—</div>
+            <div class="chord-now-meta" id="chordNowMeta">Hit play</div>
+          </div>
+          <button type="button" class="chord-side" id="chordNext" title="Next">—</button>
+          <button type="button" class="chord-side dim" id="chordNext2" title="Upcoming">—</button>
+        </div>
+      </div>
+      <div id="chordSheetView" hidden>
+        <div class="chord-sheet-scroll" id="chordSheetScroll"></div>
+      </div>
+      <div class="chord-timeline" id="chordTimeline"></div>
+    </section>
+
+    <div class="card" id="mixerCard">
       <div class="metro-panel" id="metroPanel" hidden>
         <div class="metro-panel-head">
           <strong>Metronome settings</strong>
@@ -103,6 +175,48 @@
       <div class="stems" id="stems"></div>
       <div class="footer-note" id="status">Loading stems…</div>
     </div>
+
+    <section class="card takes-card" id="takesWrap">
+      <div class="takes-head">
+        <div>
+          <h2>Takes</h2>
+          <p class="takes-hint">Mic + stem mix — you hear the song, not your voice (headphones help)</p>
+        </div>
+        <span class="takes-count" id="takesCount"></span>
+      </div>
+      <div class="rec-strip" id="recStrip" hidden>
+        <span class="rec-dot" aria-hidden="true"></span>
+        <span class="rec-timer" id="recTimer">0:00</span>
+        <span class="rec-strip-lab">Recording</span>
+        <span class="rec-mic-lab" id="recMicLab"></span>
+        <button type="button" class="ghost" id="recStripStop">Stop</button>
+      </div>
+      <div class="take-preview" id="takePreview" hidden>
+        <div class="take-preview-head">
+          <strong>Preview take</strong>
+          <span class="takes-hint">Listen first, then save or discard</span>
+        </div>
+        <audio id="previewTake" controls preload="auto"></audio>
+        <div class="take-preview-actions">
+          <button type="button" class="primary" id="saveTakeBtn">Save take</button>
+          <button type="button" id="discardTakeBtn">Discard</button>
+        </div>
+      </div>
+      <div class="takes-table-wrap">
+        <table class="takes-table" id="takesTable">
+          <thead>
+            <tr>
+              <th>Take</th>
+              <th>Date &amp; time</th>
+              <th>Play</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="takesList"></tbody>
+        </table>
+        <div class="takes-empty" id="takesEmpty">No takes yet — record, preview, then save.</div>
+      </div>
+    </section>
   </div>
 
   <script>
@@ -140,7 +254,7 @@
     };
 
     const playBtn = document.getElementById("playBtn");
-    const stopBtn = document.getElementById("stopBtn");
+    const recordBtn = document.getElementById("recordBtn");
     const resetBtn = document.getElementById("resetBtn");
     const downloadBtn = document.getElementById("downloadBtn");
     const downloadStemsBtn = document.getElementById("downloadStemsBtn");
@@ -149,12 +263,14 @@
     const keyDownBtn = document.getElementById("keyDownBtn");
     const keyUpBtn = document.getElementById("keyUpBtn");
     const keyVal = document.getElementById("keyVal");
+    const bpmDownBtn = document.getElementById("bpmDownBtn");
+    const bpmUpBtn = document.getElementById("bpmUpBtn");
+    const bpmVal = document.getElementById("bpmVal");
     const metroBtn = document.getElementById("metroBtn");
     const metroSettingsBtn = document.getElementById("metroSettingsBtn");
     const metroPanel = document.getElementById("metroPanel");
     const metroPanelClose = document.getElementById("metroPanelClose");
     const meterSel = document.getElementById("meterSel");
-    const metroBpmEl = document.getElementById("metroBpm");
     const metroVol = document.getElementById("metroVol");
     const metroVolVal = document.getElementById("metroVolVal");
     const metroSound = document.getElementById("metroSound");
@@ -165,6 +281,62 @@
     const tCur = document.getElementById("tCur");
     const tDur = document.getElementById("tDur");
     const statusEl = document.getElementById("status");
+    const detectChordsBtn = document.getElementById("detectChordsBtn");
+    const playChordsBtn = document.getElementById("playChordsBtn");
+    const showChordsBtn = document.getElementById("showChordsBtn");
+    const moreBtn = document.getElementById("moreBtn");
+    const moreMenu = document.getElementById("moreMenu");
+    const rerunStemsBtn = document.getElementById("rerunStemsBtn");
+    const rerunBeatsBtn = document.getElementById("rerunBeatsBtn");
+    const rerunChordsBtn = document.getElementById("rerunChordsBtn");
+    const sepCard = document.getElementById("sepCard");
+    const sepBar = document.getElementById("sepBar");
+    const sepMsg = document.getElementById("sepMsg");
+    const mixerCard = document.getElementById("mixerCard");
+    const chordPlayer = document.getElementById("chordPlayer");
+    const chordPlayerSub = document.getElementById("chordPlayerSub");
+    const chordTimeline = document.getElementById("chordTimeline");
+    const chordSlideView = document.getElementById("chordSlideView");
+    const chordSheetView = document.getElementById("chordSheetView");
+    const chordSheetScroll = document.getElementById("chordSheetScroll");
+    const chordPrev = document.getElementById("chordPrev");
+    const chordNow = document.getElementById("chordNow");
+    const chordNext = document.getElementById("chordNext");
+    const chordNext2 = document.getElementById("chordNext2");
+    const chordNowMeta = document.getElementById("chordNowMeta");
+    const viewSlide = document.getElementById("viewSlide");
+    const viewSheet = document.getElementById("viewSheet");
+    const takesList = document.getElementById("takesList");
+    const takesCount = document.getElementById("takesCount");
+    const recStrip = document.getElementById("recStrip");
+    const recTimerEl = document.getElementById("recTimer");
+    const recStripStop = document.getElementById("recStripStop");
+    const recMicLab = document.getElementById("recMicLab");
+    const micSel = document.getElementById("micSel");
+    const micVolEl = document.getElementById("micVol");
+    const micVolVal = document.getElementById("micVolVal");
+    const masterVolEl = document.getElementById("masterVol");
+    const masterVolVal = document.getElementById("masterVolVal");
+    const takePreview = document.getElementById("takePreview");
+    const previewTake = document.getElementById("previewTake");
+    const saveTakeBtn = document.getElementById("saveTakeBtn");
+    const discardTakeBtn = document.getElementById("discardTakeBtn");
+    const takesEmpty = document.getElementById("takesEmpty");
+    const takesTable = document.getElementById("takesTable");
+
+    function setPlayUi(isPlaying) {
+      if (!playBtn) return;
+      if (isPlaying) {
+        playBtn.classList.add("playing");
+        playBtn.classList.remove("primary");
+      } else {
+        playBtn.classList.remove("playing");
+        playBtn.classList.add("primary");
+      }
+      playBtn.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
+      playBtn.title = isPlaying ? "Pause" : "Play";
+    }
+    setPlayUi(false);
 
     let metroOn = false;
     let metroTimer = null;
@@ -180,6 +352,35 @@
     else if (BOOT.time_signature === "3/4") beatsPerBar = 3;
     else if (BOOT.time_signature === "2/4") beatsPerBar = 2;
 
+    let mixMaster = null;
+    let recBus = null;
+    let chordGain = null;
+    let micGain = null;
+    let micSource = null;
+    let micStream = null;
+    let recDest = null;
+    let mediaRecorder = null;
+    let recChunks = [];
+    let recording = false;
+    let recordBusy = false;
+    let recStartedAt = 0;
+    let recTimerId = null;
+    let pendingTake = null;
+    let selectedMicId = "";
+    let recMicGain = 1.8;
+    let masterVol = 1;
+    let sepBusy = false;
+
+    let chordList = [];
+    let originalChords = [];
+    let activeChordIdx = -1;
+    let chordViewMode = "slide";
+    let chordsOpen = false;
+    let playChordsOn = false;
+    let lastPlayedChordIdx = -1;
+    const ROOT_PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+    const PC_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
     try {
       const savedVol = localStorage.getItem("metroVolume");
       if (savedVol != null) metroVolume = Math.max(0, Math.min(1, parseFloat(savedVol)));
@@ -187,6 +388,10 @@
       if (savedSound === "beep" || savedSound === "wood" || savedSound === "tick") metroSoundStyle = savedSound;
       const savedAccent = localStorage.getItem("metroAccent");
       if (savedAccent === "0" || savedAccent === "1") metroAccentOn = savedAccent === "1";
+      const savedMic = localStorage.getItem("recMicGain");
+      if (savedMic != null) recMicGain = Math.max(0, Math.min(3, parseFloat(savedMic)));
+      const savedMaster = localStorage.getItem("mixMasterVol");
+      if (savedMaster != null) masterVol = Math.max(0, Math.min(1.5, parseFloat(savedMaster)));
     } catch (_) {}
 
     function fmtKeyOffset(n) {
@@ -229,11 +434,39 @@
               : "Detected key " + BOOT.key)
           : (keySemitones
               ? fmtKeyOffset(keySemitones) + " semitones (detect key from song hub)"
-              : "Detect chords/key from song hub to see key name");
+              : "Detect chords to see key name");
       }
       // Keep −/+ usable while playing; only lock at range edges
       if (keyDownBtn) keyDownBtn.disabled = keySemitones <= -MAX_KEY;
       if (keyUpBtn) keyUpBtn.disabled = keySemitones >= MAX_KEY;
+    }
+
+    function syncBpmUI() {
+      const shown = songBpm ? Math.round(songBpm * playbackRate) : 0;
+      if (bpmVal) {
+        bpmVal.textContent = shown ? String(shown) : "—";
+        bpmVal.title = shown
+          ? shown + " BPM · " + playbackRate.toFixed(2) + "×"
+          : "Detect beats from the ⋯ menu";
+      }
+      if (bpmDownBtn) bpmDownBtn.disabled = !songBpm || shown <= 40;
+      if (bpmUpBtn) bpmUpBtn.disabled = !songBpm || shown >= 240;
+      if (rerunBeatsBtn) {
+        rerunBeatsBtn.textContent = songBpm ? "Rerun beats" : "Detect beats";
+      }
+    }
+
+    async function setBpm(delta) {
+      if (!songBpm) {
+        setStatus("Detect beats first, then −/+ changes song speed.");
+        return;
+      }
+      const shown = Math.round(songBpm * playbackRate);
+      const target = Math.max(40, Math.min(240, shown + delta));
+      const rate = Math.max(0.25, Math.min(2, target / songBpm));
+      metroLastBeat = -1;
+      await setSpeed(rate);
+      setStatus(target + " BPM · " + rate.toFixed(2) + "×");
     }
 
     function syncMetroUI() {
@@ -245,20 +478,14 @@
       if (metroVolVal) metroVolVal.textContent = Math.round(metroVolume * 100) + "%";
       if (metroSound) metroSound.value = metroSoundStyle;
       if (metroAccent) metroAccent.checked = metroAccentOn;
-      if (metroBpmEl) {
-        const meterLabel =
-          beatsPerBar === 6 ? "6/8" : beatsPerBar === 3 ? "3/4" : beatsPerBar === 2 ? "2/4" : "4/4";
-        metroBpmEl.textContent = songBpm
-          ? songBpm + " BPM · " + meterLabel
-          : "No BPM — run Detect BPM on song hub";
-      }
+      syncBpmUI();
       if (metroBtn) {
         metroBtn.classList.toggle("on", metroOn);
         metroBtn.textContent = metroOn ? "Metronome: On" : "Metronome: Off";
         metroBtn.disabled = !songBpm;
         metroBtn.title = songBpm
           ? "Click track locked to song BPM (" + songBpm + ")"
-          : "Run Detect BPM on the song hub first";
+          : "Detect beats from the ⋯ menu first";
       }
       if (metroSettingsBtn) {
         metroSettingsBtn.classList.toggle("on", metroPanel && !metroPanel.hidden);
@@ -277,9 +504,60 @@
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return null;
         metroCtx = new AC();
+        mixMaster = metroCtx.createGain();
+        mixMaster.gain.value = masterVol;
+        mixMaster.connect(metroCtx.destination);
+        recBus = metroCtx.createGain();
+        recBus.gain.value = 1;
+        mixMaster.connect(recBus);
+        chordGain = metroCtx.createGain();
+        chordGain.gain.value = 0.5;
+        chordGain.connect(mixMaster);
+      }
+      if (metroCtx && !recBus) {
+        recBus = metroCtx.createGain();
+        recBus.gain.value = 1;
+        mixMaster.connect(recBus);
       }
       if (metroCtx.state === "suspended") metroCtx.resume().catch(() => {});
       return metroCtx;
+    }
+
+    function wireStem(t) {
+      const ctx = ensureMetroCtx();
+      if (!ctx || !t || t.source) return;
+      try {
+        t.source = ctx.createMediaElementSource(t.audio);
+        t.gainNode = ctx.createGain();
+        t.gainNode.gain.value = Math.min(1, Math.max(0, t.vol == null ? 1 : t.vol));
+        t.source.connect(t.gainNode);
+        t.gainNode.connect(mixMaster);
+        t.audio.volume = 1;
+      } catch (_) {
+        /* already wired */
+      }
+    }
+
+    function wireAllStems() {
+      for (const t of Object.values(tracks)) wireStem(t);
+    }
+
+    function applyMasterVol() {
+      if (mixMaster) mixMaster.gain.value = masterVol;
+      if (masterVolEl) masterVolEl.value = String(masterVol);
+      if (masterVolVal) masterVolVal.textContent = Math.round(masterVol * 100) + "%";
+      if (!mixMaster) applyAudibility();
+    }
+
+    function applyMicGain() {
+      if (micGain) micGain.gain.value = recMicGain;
+      if (micVolEl) micVolEl.value = String(recMicGain);
+      if (micVolVal) micVolVal.textContent = Math.round(recMicGain * 100) + "%";
+    }
+
+    function looksLikeInterfaceMic() {
+      const name = (currentMicLabel() + " " + (selectedMicId || "")).toLowerCase();
+      return /nux|usb|mixer|interface|scarlett|focusrite|behringer|steinberg|yamaha|audio box|audiobox|quad-capture|2i2|4i4|volta|irig|line 6/.test(name);
     }
 
     function playMetroClick(isDownbeat) {
@@ -312,7 +590,7 @@
         ng.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
         noise.connect(bp);
         bp.connect(ng);
-        ng.connect(ctx.destination);
+        ng.connect(mixMaster || ctx.destination);
         noise.start(t0);
         noise.stop(t0 + dur);
 
@@ -323,7 +601,7 @@
         gain.gain.setValueAtTime(peak * 0.55, t0);
         gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.05);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(mixMaster || ctx.destination);
         osc.start(t0);
         osc.stop(t0 + 0.06);
         return;
@@ -338,7 +616,7 @@
         gain.gain.setValueAtTime(peak, t0);
         gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.04);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(mixMaster || ctx.destination);
         osc.start(t0);
         osc.stop(t0 + 0.05);
         return;
@@ -352,7 +630,7 @@
       gain.gain.setValueAtTime(peak, t0);
       gain.gain.exponentialRampToValueAtTime(0.001, t0 + (accent ? 0.08 : 0.055));
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(mixMaster || ctx.destination);
       osc.start(t0);
       osc.stop(t0 + 0.09);
     }
@@ -393,7 +671,7 @@
 
     function toggleMetro() {
       if (!songBpm) {
-        setStatus("Detect BPM on the song hub first, then reopen the mixer.");
+        setStatus("Detect beats first, then turn on the metronome.");
         return;
       }
       metroOn = !metroOn;
@@ -639,9 +917,15 @@
     async function setSpeed(rate) {
       const next = Math.max(0.25, Math.min(2, Number(rate) || 1));
       playbackRate = next;
-      if (speedSel) speedSel.value = String(playbackRate);
+      if (speedSel) {
+        const match = Array.from(speedSel.options).find(
+          (o) => Math.abs(Number(o.value) - next) < 0.02
+        );
+        if (match) speedSel.value = match.value;
+      }
+      syncBpmUI();
+      applyRate();
       if (!BOOT.job_id || stretchBusy) {
-        applyRate();
         return;
       }
 
@@ -703,6 +987,7 @@
       if (next === keySemitones && !stretchBusy) return;
       keySemitones = next;
       syncKeyUI();
+      if (originalChords.length) renderChords(originalChords);
       // Update label immediately; bake in background while audio keeps playing
       if (stretchBusy) {
         pendingKey = next;
@@ -867,7 +1152,12 @@
 
       for (const [name, t] of Object.entries(tracks)) {
         const on = actives.includes(name);
-        t.audio.volume = Math.min(1, Math.max(0, t.vol));
+        t.audio.volume = 1;
+        if (t.gainNode) {
+          t.gainNode.gain.value = on ? Math.min(1, Math.max(0, t.vol)) : 0;
+        } else {
+          t.audio.volume = Math.min(1, Math.max(0, t.vol * masterVol));
+        }
         t.audio.muted = false;
 
         if (!on) {
@@ -958,7 +1248,8 @@
       const dur = duration();
       tDur.textContent = fmt(dur);
       tCur.textContent = fmt(a.currentTime || 0);
-      if (dur > 0) seekEl.value = String(Math.round((a.currentTime / dur) * 1000));
+      if (dur > 0) seekEl.value = String((a.currentTime / dur) * 1000);
+      syncChordsFromAudio();
     }
 
     async function playAll() {
@@ -967,6 +1258,8 @@
         setStatus("Unmute at least one stem to play.");
         return;
       }
+      ensureMetroCtx();
+      wireAllStems();
       applyAudibility();
       playBtn.disabled = true;
       setStatus("Buffering active stems…");
@@ -980,7 +1273,7 @@
         await Promise.all(audios.map((a) => waitForBuffer(a, 45000)));
         await Promise.all(audios.map((a) => a.play()));
         playing = true;
-        playBtn.textContent = "Pause";
+        setPlayUi(true);
         startTimers();
         setStatus(
           "Playing " +
@@ -991,7 +1284,7 @@
         );
       } catch (e) {
         playing = false;
-        playBtn.textContent = "Play";
+        setPlayUi(false);
         setStatus("Play failed — wait for buffer or try Wi‑Fi. " + (e.message || e));
       } finally {
         playBtn.disabled = false;
@@ -1001,21 +1294,16 @@
     function pauseAll() {
       for (const t of Object.values(tracks)) t.audio.pause();
       playing = false;
-      playBtn.textContent = "Play";
+      setPlayUi(false);
       clearTimers();
       setStatus("Paused");
     }
 
-    function stopAll() {
-      for (const t of Object.values(tracks)) {
-        t.audio.pause();
-        t.audio.currentTime = 0;
-      }
-      playing = false;
-      playBtn.textContent = "Play";
-      clearTimers();
+    function seekToStart() {
+      for (const t of Object.values(tracks)) t.audio.currentTime = 0;
+      metroLastBeat = -1;
+      lastPlayedChordIdx = -1;
       updateSeekUI();
-      setStatus("Stopped");
     }
 
     function togglePlay() {
@@ -1029,6 +1317,7 @@
       const t = Math.max(0, Math.min(dur, ratio * dur));
       for (const tr of Object.values(tracks)) tr.audio.currentTime = t;
       metroLastBeat = -1;
+      lastPlayedChordIdx = -1;
       updateSeekUI();
     }
 
@@ -1055,14 +1344,844 @@
       onMixChange();
     }
 
+    async function fetchJSON(url, opts) {
+      const res = await fetch(url, opts);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = data.detail;
+        const msg = typeof detail === "string" ? detail : data.message || res.statusText;
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    function preferredDevice() {
+      if (deviceSel && (deviceSel.value === "cpu" || deviceSel.value === "auto")) return deviceSel.value;
+      try {
+        const v = localStorage.getItem("practiceDevice");
+        return v === "cpu" ? "cpu" : "auto";
+      } catch (_) {
+        return "auto";
+      }
+    }
+
+    function setMoreOpen(open) {
+      if (!moreMenu || !moreBtn) return;
+      moreMenu.hidden = !open;
+      moreBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    function transposeChordLabel(label, semitones) {
+      if (!label || label === "N" || label === "?" || !semitones) return label;
+      const m = String(label).match(/^([A-G](?:#|b)?)(.*)$/);
+      if (!m) return label;
+      const idx = noteIndex(m[1]);
+      if (idx < 0) return label;
+      return NOTE_SHARP[(idx + semitones + 120) % 12] + (m[2] || "");
+    }
+
+    function collapseChordChanges(chords, minDur) {
+      minDur = minDur == null ? 0.45 : minDur;
+      if (!chords || !chords.length) return [];
+      const merged = [];
+      for (const c of chords) {
+        const label = String(c.label || "N");
+        const start = Number(c.start) || 0;
+        let end = c.end != null ? Number(c.end) : start;
+        if (end < start) end = start;
+        if (merged.length && merged[merged.length - 1].label === label) {
+          merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, end);
+        } else {
+          merged.push({ ...c, label, start, end });
+        }
+      }
+      let i = 0;
+      while (i < merged.length) {
+        const dur = merged[i].end - merged[i].start;
+        const short = dur < minDur || (merged[i].label === "N" && dur < minDur * 2);
+        if (short) {
+          if (i > 0) {
+            merged[i - 1].end = merged[i].end;
+            merged.splice(i, 1);
+            if (i < merged.length && merged[i - 1].label === merged[i].label) {
+              merged[i - 1].end = merged[i].end;
+              merged.splice(i, 1);
+            }
+            continue;
+          }
+          if (i + 1 < merged.length) {
+            merged[i + 1].start = merged[i].start;
+            merged.splice(i, 1);
+            continue;
+          }
+        }
+        i += 1;
+      }
+      const out = [];
+      for (const c of merged) {
+        if (out.length && out[out.length - 1].label === c.label) {
+          out[out.length - 1].end = c.end;
+        } else {
+          out.push({
+            ...c,
+            start: Math.round(c.start * 1000) / 1000,
+            end: Math.round(c.end * 1000) / 1000,
+          });
+        }
+      }
+      return out;
+    }
+
+    function chordsForKey(semitones) {
+      return (originalChords || []).map((c) => ({
+        ...c,
+        label: transposeChordLabel(c.label, semitones),
+      }));
+    }
+
+    function indexAtTime(t) {
+      if (!chordList.length) return -1;
+      for (let i = 0; i < chordList.length; i++) {
+        const c = chordList[i];
+        const start = c.start || 0;
+        const end = c.end != null ? c.end : start;
+        if (t >= start && t < end) return i;
+      }
+      if (t < (chordList[0].start || 0)) return 0;
+      return chordList.length - 1;
+    }
+
+    function seekToChord(i) {
+      if (i < 0 || i >= chordList.length) return;
+      const dur = duration();
+      const start = chordList[i].start || 0;
+      if (dur > 0) seekToRatio(start / dur);
+      else {
+        for (const tr of Object.values(tracks)) tr.audio.currentTime = start;
+        updateSeekUI();
+      }
+      setActiveChord(i, true);
+    }
+
+    function midiFreq(midi) {
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    }
+
+    function parseRootToken(token) {
+      const m = String(token || "").trim().match(/^([A-G])([#b]?)(.*)$/i);
+      if (!m) return null;
+      let pc = ROOT_PC[m[1].toUpperCase()];
+      if (m[2] === "#") pc += 1;
+      if (m[2] === "b") pc -= 1;
+      pc = ((pc % 12) + 12) % 12;
+      return { pc, rest: m[3] || "" };
+    }
+
+    function parseChord(sym) {
+      const raw = String(sym || "").trim();
+      if (!raw || raw === "N" || raw === "?") return null;
+      const slash = raw.indexOf("/");
+      const main = slash >= 0 ? raw.slice(0, slash) : raw;
+      const bassTok = slash >= 0 ? raw.slice(slash + 1) : "";
+      const root = parseRootToken(main);
+      if (!root) return null;
+      let q = root.rest.toLowerCase();
+      let third = 4;
+      let fifth = 7;
+      let seventh = null;
+      if (q.startsWith("maj7") || q.startsWith("ma7")) seventh = 11;
+      else if (q.startsWith("min") || (q.startsWith("m") && !q.startsWith("maj"))) {
+        third = 3;
+        if (q.includes("7")) seventh = 10;
+      } else if (q.startsWith("dim")) {
+        third = 3;
+        fifth = 6;
+      } else if (q.startsWith("aug") || q.startsWith("+")) fifth = 8;
+      else if (q.startsWith("sus4")) third = 5;
+      else if (q.startsWith("sus2")) third = 2;
+      else if (q.includes("7")) seventh = 10;
+      const ints = [0, third, fifth];
+      if (seventh != null) ints.push(seventh);
+      let bassPc = root.pc;
+      if (bassTok) {
+        const b = parseRootToken(bassTok);
+        if (b) bassPc = b.pc;
+      }
+      return { pc: root.pc, bassPc, ints };
+    }
+
+    function toMidiRange(pc, low, high) {
+      let m = pc;
+      while (m < low) m += 12;
+      while (m > high) m -= 12;
+      if (m < low) m += 12;
+      return m;
+    }
+
+    function playEpNote(t, midi, vel) {
+      const ctx = ensureMetroCtx();
+      if (!ctx || !chordGain) return;
+      const f = midiFreq(midi);
+      const dur = 1.2;
+      const car = ctx.createOscillator();
+      const mod = ctx.createOscillator();
+      const modg = ctx.createGain();
+      const g = ctx.createGain();
+      car.type = "sine";
+      car.frequency.setValueAtTime(f, t);
+      mod.type = "sine";
+      mod.frequency.value = f * 14;
+      modg.gain.setValueAtTime(f * 1.1 * vel, t);
+      modg.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      mod.connect(modg);
+      modg.connect(car.frequency);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, 0.22 * vel), t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      car.connect(g);
+      g.connect(chordGain);
+      car.start(t);
+      car.stop(t + dur);
+      mod.start(t);
+      mod.stop(t + 0.22);
+    }
+
+    function playPianoChord(sym, accent) {
+      const ch = parseChord(sym);
+      if (!ch) return;
+      const ctx = ensureMetroCtx();
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      const vel = accent ? 0.95 : 0.55;
+      const thirds = ch.ints.filter((i) => i !== 0);
+      const midis = [toMidiRange(ch.pc, 55, 64)];
+      thirds.forEach((iv, i) => {
+        midis.push(toMidiRange((ch.pc + iv) % 12, i === 0 ? 60 : 64, i === 0 ? 72 : 76));
+      });
+      const uniq = [];
+      midis.forEach((m) => {
+        if (!uniq.includes(m)) uniq.push(m);
+      });
+      uniq.slice(0, 4).forEach((m, i) => playEpNote(t, m, vel * (1 - i * 0.08)));
+    }
+
+    function setActiveChord(i, forceScroll) {
+      activeChordIdx = i;
+      const c = i >= 0 ? chordList[i] : null;
+      const prev = i > 0 ? chordList[i - 1] : null;
+      const next = i >= 0 && i + 1 < chordList.length ? chordList[i + 1] : null;
+      const next2 = i >= 0 && i + 2 < chordList.length ? chordList[i + 2] : null;
+      if (chordPrev) {
+        chordPrev.textContent = prev ? prev.label : "·";
+        chordPrev.disabled = !prev;
+      }
+      if (chordNow) chordNow.textContent = c ? c.label : "—";
+      if (chordNext) {
+        chordNext.textContent = next ? next.label : "·";
+        chordNext.disabled = !next;
+      }
+      if (chordNext2) {
+        chordNext2.textContent = next2 ? next2.label : "·";
+        chordNext2.disabled = !next2;
+      }
+      if (chordNowMeta) {
+        chordNowMeta.textContent = c
+          ? fmt(c.start) + " – " + fmt(c.end) + " · chord " + (i + 1) + " / " + chordList.length
+          : "Hit play";
+      }
+      if (chordTimeline) {
+        chordTimeline.querySelectorAll(".chord-seg").forEach((el, idx) => {
+          el.classList.toggle("active", idx === i);
+        });
+      }
+      if (chordSheetScroll) {
+        const chips = chordSheetScroll.querySelectorAll(".chord-chip");
+        chips.forEach((el, idx) => {
+          const on = idx === i;
+          el.classList.toggle("active", on);
+          if (on && (forceScroll || chordViewMode === "sheet")) {
+            el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+          }
+        });
+      }
+      if (playChordsOn && playing && c && i !== lastPlayedChordIdx && c.label !== "N") {
+        lastPlayedChordIdx = i;
+        playPianoChord(c.label, true);
+      }
+    }
+
+    function syncChordsFromAudio() {
+      if (!chordList.length) return;
+      const a = masterAudio();
+      const t = a ? a.currentTime || 0 : 0;
+      const i = indexAtTime(t);
+      if (i !== activeChordIdx) setActiveChord(i, false);
+    }
+
+    function setChordView(mode) {
+      chordViewMode = mode;
+      if (viewSlide) viewSlide.classList.toggle("on", mode === "slide");
+      if (viewSheet) viewSheet.classList.toggle("on", mode === "sheet");
+      if (chordSlideView) chordSlideView.hidden = mode !== "slide";
+      if (chordSheetView) chordSheetView.hidden = mode !== "sheet";
+      if (activeChordIdx >= 0) setActiveChord(activeChordIdx, true);
+    }
+
+    function syncPlayChordsUi() {
+      if (!playChordsBtn) return;
+      playChordsBtn.classList.toggle("on", playChordsOn);
+      playChordsBtn.textContent = playChordsOn ? "Play chords: On" : "Play chords: Off";
+      playChordsBtn.disabled = !chordList.length;
+    }
+
+    function syncShowChordsUi() {
+      if (!showChordsBtn) return;
+      const canShow = chordList.length > 0;
+      showChordsBtn.disabled = !canShow;
+      showChordsBtn.classList.toggle("on", chordsOpen && canShow);
+      showChordsBtn.textContent = chordsOpen && canShow ? "Hide chords" : "Show chords";
+      if (chordPlayer) chordPlayer.hidden = !(chordsOpen && canShow);
+    }
+
+    function toggleShowChords() {
+      if (!chordList.length) {
+        setStatus("Detect chords first.");
+        return;
+      }
+      chordsOpen = !chordsOpen;
+      syncShowChordsUi();
+    }
+
+    function renderChords(chords) {
+      originalChords = collapseChordChanges(chords || []);
+      chordList = chordsForKey(keySemitones);
+      activeChordIdx = -1;
+      lastPlayedChordIdx = -1;
+      if (!chordPlayer) return;
+      if (!chordList.length) {
+        chordsOpen = false;
+        if (chordTimeline) chordTimeline.innerHTML = "";
+        if (chordSheetScroll) chordSheetScroll.innerHTML = "";
+        syncPlayChordsUi();
+        syncShowChordsUi();
+        return;
+      }
+      syncShowChordsUi();
+      if (chordPlayerSub) {
+        chordPlayerSub.textContent =
+          chordList.length +
+          " chords" +
+          (BOOT.chords_source ? " · " + BOOT.chords_source : "") +
+          (BOOT.key ? " · key " + (transposeKeyName(BOOT.key, keySemitones) || BOOT.key) : "") +
+          " — play to follow along";
+      }
+      const durationMax = Math.max(...chordList.map((c) => c.end || 0), 1);
+      if (chordTimeline) {
+        chordTimeline.innerHTML = "";
+        chordList.forEach((c, i) => {
+          const start = c.start || 0;
+          const end = c.end || start;
+          const seg = document.createElement("button");
+          seg.type = "button";
+          seg.className = "chord-seg" + (i % 2 ? " alt" : "");
+          seg.style.left = (start / durationMax) * 100 + "%";
+          seg.style.width = Math.max(((end - start) / durationMax) * 100, 0.35) + "%";
+          seg.textContent = c.label || "?";
+          seg.title = (c.label || "") + " · " + fmt(start) + "–" + fmt(end);
+          seg.onclick = () => seekToChord(i);
+          chordTimeline.appendChild(seg);
+        });
+      }
+      if (chordSheetScroll) {
+        chordSheetScroll.innerHTML = "";
+        chordList.forEach((c, i) => {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "chord-chip";
+          chip.innerHTML =
+            '<span class="chord-chip-lab">' +
+            (c.label || "?") +
+            '</span><span class="chord-chip-t">' +
+            fmt(c.start) +
+            "</span>";
+          chip.onclick = () => seekToChord(i);
+          chordSheetScroll.appendChild(chip);
+        });
+      }
+      setChordView(chordViewMode);
+      const a = masterAudio();
+      setActiveChord(indexAtTime(a ? a.currentTime || 0 : 0), true);
+      syncPlayChordsUi();
+      syncShowChordsUi();
+    }
+
+    function applyBpmResult(r) {
+      songBpm = Number(r.bpm) || 0;
+      beat0 = Number(r.beat_0 || (r.bpm_meta && r.bpm_meta.beat_0) || 0) || 0;
+      beatsPerBar = Number(r.beats_per_bar) || beatsPerBar || 4;
+      BOOT.bpm = songBpm;
+      BOOT.bpm_meta = r.bpm_meta || r;
+      BOOT.time_signature = r.time_signature || BOOT.time_signature;
+      BOOT.beats_per_bar = beatsPerBar;
+      syncMetroUI();
+    }
+
+    async function runBeats() {
+      if (!BOOT.job_id) return;
+      if (rerunBeatsBtn) rerunBeatsBtn.disabled = true;
+      setStatus("Detecting beats…");
+      try {
+        const r = await fetchJSON("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/bpm", {
+          method: "POST",
+        });
+        applyBpmResult(r);
+        setStatus(
+          "Beats: " +
+            r.bpm +
+            " BPM" +
+            (r.time_signature ? " · " + r.time_signature : "") +
+            (r.beat_count ? " · " + r.beat_count + " beats" : "")
+        );
+      } catch (e) {
+        setStatus("Beat detect failed: " + (e.message || e));
+      } finally {
+        if (rerunBeatsBtn) rerunBeatsBtn.disabled = false;
+      }
+    }
+
+    async function runChords() {
+      if (!BOOT.job_id) return;
+      if (detectChordsBtn) detectChordsBtn.disabled = true;
+      if (rerunChordsBtn) rerunChordsBtn.disabled = true;
+      setStatus("Detecting chords…");
+      try {
+        const r = await fetchJSON("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/chords", {
+          method: "POST",
+        });
+        BOOT.chords = r.chords;
+        BOOT.chord_count = r.chord_count;
+        BOOT.chords_status = "done";
+        BOOT.chords_source = r.source;
+        BOOT.chords_engine = r.engine;
+        if (r.key) {
+          BOOT.key = r.key;
+          BOOT.key_meta = r.key_meta;
+          syncKeyUI();
+        }
+        renderChords(r.chords);
+        setStatus(
+          (r.chord_count || 0) +
+            " chords" +
+            (r.key ? " · key " + r.key : "") +
+            " — turn on Play chords to hear them"
+        );
+      } catch (e) {
+        setStatus("Chord detect failed: " + (e.message || e));
+      } finally {
+        if (detectChordsBtn) detectChordsBtn.disabled = false;
+        if (rerunChordsBtn) rerunChordsBtn.disabled = false;
+      }
+    }
+
+    function togglePlayChords() {
+      if (!chordList.length) {
+        setStatus("Detect chords first.");
+        return;
+      }
+      playChordsOn = !playChordsOn;
+      lastPlayedChordIdx = -1;
+      syncPlayChordsUi();
+      setStatus(playChordsOn ? "Play chords on — piano follows the chart" : "Play chords off");
+      if (playChordsOn && playing && activeChordIdx >= 0) {
+        const c = chordList[activeChordIdx];
+        if (c && c.label !== "N") playPianoChord(c.label, true);
+      }
+    }
+
+    function fmtWhen(ts) {
+      if (!ts) return "";
+      const d = new Date(ts * 1000);
+      return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    }
+
+    function currentMicLabel() {
+      if (!micSel) return "Default microphone";
+      const opt = micSel.selectedOptions && micSel.selectedOptions[0];
+      return (opt && opt.textContent) || "Default microphone";
+    }
+
+    function syncRecordLabel() {
+      if (!recordBtn) return;
+      const mic = currentMicLabel();
+      recordBtn.textContent = recording ? "● Stop" : "● Record";
+      recordBtn.title = (recording ? "Stop recording" : "Record") + " · " + mic;
+      if (recMicLab) recMicLab.textContent = mic;
+    }
+
+    async function refreshMics() {
+      if (!micSel || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const mics = devices.filter((d) => d.kind === "audioinput");
+        const prev = selectedMicId || micSel.value || "";
+        micSel.innerHTML = "";
+        if (!mics.length) {
+          const o = document.createElement("option");
+          o.value = "";
+          o.textContent = "Default microphone";
+          micSel.appendChild(o);
+        } else {
+          mics.forEach((d, i) => {
+            const o = document.createElement("option");
+            o.value = d.deviceId || "";
+            o.textContent = d.label || ("Microphone " + (i + 1));
+            micSel.appendChild(o);
+          });
+        }
+        if (prev && Array.from(micSel.options).some((o) => o.value === prev)) {
+          micSel.value = prev;
+        }
+        selectedMicId = micSel.value || "";
+        syncRecordLabel();
+      } catch (_) {}
+    }
+
+    function renderTakes(list) {
+      if (!takesList) return;
+      const recs = (list || BOOT.recordings || []).slice().sort((a, b) => (b.created || 0) - (a.created || 0));
+      BOOT.recordings = recs;
+      const n = recs.length;
+      if (takesCount) takesCount.textContent = n ? n + (n === 1 ? " take" : " takes") : "";
+      if (takesEmpty) takesEmpty.hidden = n > 0;
+      if (takesTable) takesTable.hidden = n === 0;
+      takesList.innerHTML = "";
+      recs.forEach((rec, i) => {
+        const num = String(n - i).padStart(2, "0");
+        const tr = document.createElement("tr");
+        const tdNum = document.createElement("td");
+        tdNum.className = "take-num";
+        tdNum.textContent = num;
+        const tdWhen = document.createElement("td");
+        tdWhen.className = "take-when";
+        tdWhen.textContent = fmtWhen(rec.created);
+        const tdPlay = document.createElement("td");
+        tdPlay.className = "take-play";
+        const audio = document.createElement("audio");
+        audio.controls = true;
+        audio.preload = "metadata";
+        audio.src = rec.url;
+        tdPlay.appendChild(audio);
+        const tdDel = document.createElement("td");
+        tdDel.className = "take-del-cell";
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "take-del";
+        del.setAttribute("aria-label", "Delete take " + num);
+        del.textContent = "✕";
+        del.onclick = () => deleteTake(rec);
+        tdDel.appendChild(del);
+        tr.appendChild(tdNum);
+        tr.appendChild(tdWhen);
+        tr.appendChild(tdPlay);
+        tr.appendChild(tdDel);
+        takesList.appendChild(tr);
+      });
+    }
+
+    async function deleteTake(rec) {
+      if (!rec || !rec.name) return;
+      if (!confirm("Delete this take?")) return;
+      try {
+        await fetchJSON(
+          "/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/recordings/" + encodeURIComponent(rec.name),
+          { method: "DELETE" }
+        );
+        renderTakes((BOOT.recordings || []).filter((x) => x.name !== rec.name));
+        setStatus("Take deleted.");
+      } catch (e) {
+        setStatus("Delete failed: " + (e.message || e));
+      }
+    }
+
+    function discardPendingTake() {
+      if (previewTake) {
+        previewTake.pause();
+        previewTake.removeAttribute("src");
+        previewTake.load();
+      }
+      if (pendingTake && pendingTake.url) URL.revokeObjectURL(pendingTake.url);
+      pendingTake = null;
+      if (takePreview) takePreview.hidden = true;
+    }
+
+    function showPendingTake(blob, mime) {
+      discardPendingTake();
+      const url = URL.createObjectURL(blob);
+      pendingTake = { blob, mime, url };
+      if (previewTake) {
+        previewTake.src = url;
+        previewTake.load();
+      }
+      if (takePreview) takePreview.hidden = false;
+      takePreview.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      setStatus("Preview your take, then Save or Discard.");
+    }
+
+    async function savePendingTake() {
+      if (!pendingTake) return;
+      if (saveTakeBtn) saveTakeBtn.disabled = true;
+      setStatus("Saving take…");
+      try {
+        const body = new FormData();
+        const mime = pendingTake.mime || "audio/webm";
+        const ext = mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm";
+        body.append("file", pendingTake.blob, "take." + ext);
+        const info = await fetchJSON("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/recordings", {
+          method: "POST",
+          body,
+        });
+        discardPendingTake();
+        renderTakes([info].concat(BOOT.recordings || []));
+        setStatus("Take saved.");
+      } catch (e) {
+        setStatus("Save failed: " + (e.message || e));
+      } finally {
+        if (saveTakeBtn) saveTakeBtn.disabled = false;
+      }
+    }
+
+    function pickRecorderMime() {
+      const types = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/ogg;codecs=opus",
+      ];
+      for (const t of types) {
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
+      }
+      return "";
+    }
+
+    function setRecordUi(on) {
+      if (!recordBtn) return;
+      recordBtn.classList.toggle("on", !!on);
+      recordBtn.setAttribute("aria-label", on ? "Stop recording" : "Record");
+      if (recStrip) recStrip.hidden = !on;
+      if (!on) stopRecTimer();
+      syncRecordLabel();
+    }
+
+    function tickRecTimer() {
+      if (!recTimerEl || !recStartedAt) return;
+      recTimerEl.textContent = fmt((Date.now() - recStartedAt) / 1000);
+    }
+
+    function startRecTimer() {
+      stopRecTimer();
+      recStartedAt = Date.now();
+      tickRecTimer();
+      recTimerId = setInterval(tickRecTimer, 200);
+    }
+
+    function stopRecTimer() {
+      if (recTimerId) clearInterval(recTimerId);
+      recTimerId = null;
+      recStartedAt = 0;
+      if (recTimerEl) recTimerEl.textContent = "0:00";
+    }
+
+    async function startRecording() {
+      if (recording || recordBusy) return;
+      if (!Object.keys(tracks).length) {
+        setStatus("Stems are not ready yet.");
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setStatus("Recording needs microphone permission in this browser.");
+        return;
+      }
+      recordBusy = true;
+      try {
+        const ctx = ensureMetroCtx();
+        wireAllStems();
+        const useClean = !!(selectedMicId || looksLikeInterfaceMic());
+        const audioOpts = useClean
+          ? {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            }
+          : {
+              echoCancellation: { ideal: true },
+              noiseSuppression: { ideal: true },
+              autoGainControl: { ideal: true },
+              channelCount: { ideal: 1 },
+            };
+        if (selectedMicId) audioOpts.deviceId = { exact: selectedMicId };
+        try {
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: audioOpts });
+        } catch (_) {
+          delete audioOpts.deviceId;
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: audioOpts });
+        }
+        await refreshMics();
+        const track = micStream.getAudioTracks()[0];
+        if (track && track.getSettings) {
+          const id = track.getSettings().deviceId;
+          if (id && micSel) {
+            selectedMicId = id;
+            if (Array.from(micSel.options).some((o) => o.value === id)) micSel.value = id;
+          }
+        }
+        syncRecordLabel();
+        micSource = ctx.createMediaStreamSource(micStream);
+        micGain = ctx.createGain();
+        micGain.gain.value = recMicGain;
+        recDest = ctx.createMediaStreamDestination();
+        recBus.connect(recDest);
+        micSource.connect(micGain);
+        micGain.connect(recDest);
+        recChunks = [];
+        const mime = pickRecorderMime();
+        let recOpts = { audioBitsPerSecond: 256000 };
+        if (mime) recOpts.mimeType = mime;
+        try {
+          mediaRecorder = new MediaRecorder(recDest.stream, recOpts);
+        } catch (_) {
+          recOpts = mime ? { mimeType: mime } : {};
+          mediaRecorder = new MediaRecorder(recDest.stream, recOpts);
+        }
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size) recChunks.push(e.data);
+        };
+        mediaRecorder.onstop = () => {
+          finishRecording(mediaRecorder.mimeType || mime || "audio/webm");
+        };
+        mediaRecorder.start(200);
+        recording = true;
+        setRecordUi(true);
+        startRecTimer();
+        if (!playing) await playAll();
+        setStatus(
+          "Recording" +
+            (useClean ? " (clean USB/mixer input)" : "") +
+            " · mic " +
+            Math.round(recMicGain * 100) +
+            "%"
+        );
+      } catch (e) {
+        cleanupMic();
+        setRecordUi(false);
+        setStatus("Record failed: " + (e.message || e) + " — allow the microphone.");
+      } finally {
+        recordBusy = false;
+      }
+    }
+
+    function stopRecording() {
+      if (!recording || !mediaRecorder) return;
+      recording = false;
+      setRecordUi(false);
+      pauseAll();
+      try {
+        if (mediaRecorder.state !== "inactive") mediaRecorder.stop();
+      } catch (_) {
+        finishRecording("audio/webm");
+      }
+    }
+
+    function cleanupMic() {
+      stopRecTimer();
+      try {
+        if (micGain) micGain.disconnect();
+      } catch (_) {}
+      try {
+        if (micSource) micSource.disconnect();
+      } catch (_) {}
+      if (micStream) {
+        micStream.getTracks().forEach((t) => t.stop());
+      }
+      try {
+        if (recDest && recBus) recBus.disconnect(recDest);
+      } catch (_) {}
+      try {
+        if (recDest && mixMaster) mixMaster.disconnect(recDest);
+      } catch (_) {}
+      micGain = null;
+      micSource = null;
+      micStream = null;
+      recDest = null;
+      mediaRecorder = null;
+    }
+
+    async function finishRecording(mime) {
+      const chunks = recChunks.slice();
+      recChunks = [];
+      cleanupMic();
+      if (!chunks.length) {
+        setStatus("Recording was empty.");
+        return;
+      }
+      showPendingTake(new Blob(chunks, { type: mime || "audio/webm" }), mime || "audio/webm");
+    }
+
+    async function toggleRecord() {
+      if (recording) stopRecording();
+      else await startRecording();
+    }
+
+    async function pollSeparate(taskId) {
+      for (;;) {
+        const job = await fetchJSON("/api/tasks/" + taskId);
+        if (sepBar) sepBar.style.width = Math.round((job.progress || 0) * 100) + "%";
+        if (sepMsg) sepMsg.textContent = job.message || job.status;
+        setStatus(job.message || job.status);
+        if (job.status === "done") return job;
+        if (job.status === "error" || job.status === "cancelled") {
+          throw new Error(job.message || job.status);
+        }
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    }
+
+    async function runStems(forceReload) {
+      if (!BOOT.job_id || sepBusy) return;
+      sepBusy = true;
+      if (sepCard) sepCard.hidden = false;
+      if (sepMsg) {
+        sepMsg.classList.remove("error");
+        sepMsg.textContent = "Starting stem split…";
+      }
+      if (sepBar) sepBar.style.width = "2%";
+      if (playBtn) playBtn.disabled = true;
+      if (recordBtn) recordBtn.disabled = true;
+      setStatus("Splitting stems…");
+      try {
+        const body = new FormData();
+        body.append("device", preferredDevice());
+        const { task_id } = await fetchJSON(
+          "/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/separate",
+          { method: "POST", body }
+        );
+        await pollSeparate(task_id);
+        setStatus("Stems ready — loading mixer…");
+        window.location.reload();
+      } catch (e) {
+        if (sepMsg) {
+          sepMsg.textContent = String(e.message || e);
+          sepMsg.classList.add("error");
+        }
+        setStatus("Stem split failed: " + (e.message || e));
+        if (playBtn) playBtn.disabled = !Object.keys(tracks).length;
+        if (recordBtn) recordBtn.disabled = !Object.keys(tracks).length;
+        sepBusy = false;
+      }
+    }
+
     function render() {
       document.getElementById("title").textContent = BOOT.title || "Practice player";
       document.title = (BOOT.title || "Player") + " · Practice Stems";
-      const hub = document.getElementById("hubLink");
-      if (hub && BOOT.hub_url) {
-        hub.href = BOOT.hub_url;
-        hub.style.display = "";
-      }
 
       const presetsEl = document.getElementById("presets");
       presetsEl.innerHTML = "";
@@ -1093,7 +2212,12 @@
           tracks[name].vol = parseFloat(e.target.value);
           document.getElementById("volval-" + name).textContent =
             Math.round(tracks[name].vol * 100) + "%";
-          tracks[name].audio.volume = Math.min(1, Math.max(0, tracks[name].vol));
+          if (tracks[name].gainNode) {
+            const on = trackAudible(tracks[name]);
+            tracks[name].gainNode.gain.value = on ? Math.min(1, Math.max(0, tracks[name].vol)) : 0;
+          } else {
+            tracks[name].audio.volume = Math.min(1, Math.max(0, tracks[name].vol));
+          }
           activePreset = "";
           refreshButtons();
         };
@@ -1114,43 +2238,56 @@
     }
 
     function init() {
+      document.getElementById("title").textContent = BOOT.title || "Practice player";
+      document.title = (BOOT.title || "Player") + " · Practice Stems";
+      renderTakes(BOOT.recordings || []);
+      if (BOOT.chords && BOOT.chords.length) renderChords(BOOT.chords);
+      else renderChords([]);
+      syncPlayChordsUi();
+      syncKeyUI();
+      syncMetroUI();
+      syncHqButton();
+      setPlayUi(false);
+      syncRecordLabel();
+
       const stemMap = BOOT.stems || {};
       const names = STEM_ORDER.filter((n) => stemMap[n]);
-      if (!names.length) {
-        setStatus("No stems found for this job.");
-        playBtn.disabled = true;
+      const hasStems = names.length >= 4 || BOOT.has_stems;
+      if (!hasStems || !names.length) {
+        if (mixerCard) mixerCard.hidden = true;
+        if (playBtn) playBtn.disabled = true;
+        if (recordBtn) recordBtn.disabled = true;
+        if (resetBtn) resetBtn.disabled = true;
+        if (downloadBtn) downloadBtn.disabled = true;
+        if (downloadStemsBtn) downloadStemsBtn.disabled = true;
+        runStems();
         return;
       }
 
       for (const name of names) {
         const audio = new Audio();
         audio.preload = "metadata";
+        audio.crossOrigin = "anonymous";
         audio.src = stemMap[name];
         audio.addEventListener("ended", () => {
-          // When master ends, stop all
-          if (name === names[0]) stopAll();
+          if (name === names[0]) pauseAll();
         });
         tracks[name] = { audio, muted: false, solo: false, vol: 1, originalSrc: stemMap[name] };
       }
 
-      // Play waits for buffer on active stems only; muted stems stay paused.
       playBtn.disabled = false;
-      stopBtn.disabled = false;
+      if (recordBtn) recordBtn.disabled = false;
       resetBtn.disabled = false;
       downloadBtn.disabled = false;
       downloadStemsBtn.disabled = false;
-      speedSel.disabled = false;
+      if (speedSel) speedSel.disabled = false;
       if (hqSpeedBtn) hqSpeedBtn.disabled = false;
-      syncHqButton();
-      syncKeyUI();
-      syncMetroUI();
       applyRate();
       render();
       applyAudibility();
       setStatus("Ready — " + names.length + " stems. Change Key while playing.");
       ensureKeyDetected();
 
-      // Update duration when metadata arrives
       const master = tracks[names[0]].audio;
       master.addEventListener("loadedmetadata", updateSeekUI);
     }
@@ -1169,11 +2306,68 @@
     }
 
     playBtn.onclick = togglePlay;
-    stopBtn.onclick = stopAll;
+    if (recordBtn) recordBtn.onclick = toggleRecord;
+    if (micSel) {
+      micSel.onchange = () => {
+        selectedMicId = micSel.value || "";
+        syncRecordLabel();
+      };
+    }
+    if (micVolEl) {
+      micVolEl.value = String(recMicGain);
+      micVolEl.oninput = () => {
+        recMicGain = parseFloat(micVolEl.value) || 0;
+        applyMicGain();
+        try { localStorage.setItem("recMicGain", String(recMicGain)); } catch (_) {}
+      };
+    }
+    if (masterVolEl) {
+      masterVolEl.value = String(masterVol);
+      masterVolEl.oninput = () => {
+        masterVol = parseFloat(masterVolEl.value) || 0;
+        applyMasterVol();
+        try { localStorage.setItem("mixMasterVol", String(masterVol)); } catch (_) {}
+      };
+    }
+    applyMicGain();
+    applyMasterVol();
+    if (saveTakeBtn) saveTakeBtn.onclick = savePendingTake;
+    if (discardTakeBtn) discardTakeBtn.onclick = () => {
+      discardPendingTake();
+      setStatus("Take discarded.");
+    };
+    refreshMics();
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener("devicechange", refreshMics);
+    }
+    if (recStripStop) recStripStop.onclick = () => { if (recording) stopRecording(); };
+    if (detectChordsBtn) detectChordsBtn.onclick = runChords;
+    if (playChordsBtn) playChordsBtn.onclick = togglePlayChords;
+    if (showChordsBtn) showChordsBtn.onclick = toggleShowChords;
+    const hideChordsBtn = document.getElementById("hideChordsBtn");
+    if (hideChordsBtn) hideChordsBtn.onclick = () => { chordsOpen = false; syncShowChordsUi(); };
+    if (bpmDownBtn) bpmDownBtn.onclick = () => setBpm(-1);
+    if (bpmUpBtn) bpmUpBtn.onclick = () => setBpm(1);
+    if (moreBtn) {
+      moreBtn.onclick = (e) => {
+        e.stopPropagation();
+        setMoreOpen(moreMenu && moreMenu.hidden);
+      };
+    }
+    document.addEventListener("click", () => setMoreOpen(false));
+    if (moreMenu) moreMenu.addEventListener("click", (e) => e.stopPropagation());
+    if (rerunStemsBtn) rerunStemsBtn.onclick = () => { setMoreOpen(false); runStems(true); };
+    if (rerunBeatsBtn) rerunBeatsBtn.onclick = () => { setMoreOpen(false); runBeats(); };
+    if (rerunChordsBtn) rerunChordsBtn.onclick = () => { setMoreOpen(false); runChords(); };
+    if (viewSlide) viewSlide.onclick = () => setChordView("slide");
+    if (viewSheet) viewSheet.onclick = () => setChordView("sheet");
+    if (chordPrev) chordPrev.onclick = () => seekToChord(activeChordIdx - 1);
+    if (chordNext) chordNext.onclick = () => seekToChord(activeChordIdx + 1);
+    if (chordNext2) chordNext2.onclick = () => seekToChord(activeChordIdx + 2);
     resetBtn.onclick = () => applyPreset("all");
     downloadBtn.onclick = downloadMix;
     downloadStemsBtn.onclick = downloadStems;
-    speedSel.onchange = () => setSpeed(speedSel.value);
+    if (speedSel) speedSel.onchange = () => setSpeed(speedSel.value);
     if (hqSpeedBtn) hqSpeedBtn.onclick = toggleHqSpeed;
     if (keyDownBtn) keyDownBtn.onclick = () => setKey(-1);
     if (keyUpBtn) keyUpBtn.onclick = () => setKey(1);

@@ -290,7 +290,6 @@
   };
 
   const playBtn = document.getElementById("playBtn");
-  const stopBtn = document.getElementById("stopBtn");
   const tapBtn = document.getElementById("tapBtn");
   const metroBtn = document.getElementById("metroBtn");
   const tempoEl = document.getElementById("tempo");
@@ -427,8 +426,9 @@
     if (kitLoading) return kitLoading;
     if (!ensureCtx()) return false;
     kitLoading = (async () => {
-      playBtn.textContent = "Loading kit…";
       playBtn.disabled = true;
+      setPlayUi(false);
+      playBtn.title = "Loading kit…";
       const entries = Object.entries(KIT_URLS);
       await Promise.all(
         entries.map(async ([key, url]) => {
@@ -440,7 +440,7 @@
       );
       kitReady = true;
       playBtn.disabled = false;
-      playBtn.textContent = playing ? "Pause" : "Play";
+      setPlayUi(playing);
       return true;
     })();
     try {
@@ -448,7 +448,7 @@
     } catch (err) {
       kitLoading = null;
       playBtn.disabled = false;
-      playBtn.textContent = "Play";
+      setPlayUi(false);
       alert("Could not load acoustic kit: " + err.message);
       return false;
     }
@@ -897,11 +897,23 @@
     if (!fromLoop) savePrefs();
   }
 
+  function setPlayUi(on) {
+    if (!playBtn) return;
+    if (on) {
+      playBtn.classList.add("playing");
+      playBtn.classList.remove("primary");
+    } else {
+      playBtn.classList.remove("playing");
+      playBtn.classList.add("primary");
+    }
+    playBtn.setAttribute("aria-label", on ? "Pause" : "Play");
+    playBtn.title = on ? "Pause" : "Play";
+  }
   function setPlaying(on) {
     playing = on;
-    playBtn.textContent = on ? "Pause" : "Play";
-    playBtn.classList.toggle("primary", !on);
+    setPlayUi(on);
   }
+  setPlayUi(false);
 
   async function start(useCountIn) {
     if (!ensureCtx()) {
@@ -1151,7 +1163,6 @@
   Object.values(KIT_URLS).forEach((url) => fetch(url).catch(() => {}));
 
   playBtn.onclick = togglePlay;
-  stopBtn.onclick = () => stop(true);
   tapBtn.onclick = onTap;
   bpmUp.onclick = () => setBpm(bpm + 5);
   bpmDown.onclick = () => setBpm(bpm - 5);

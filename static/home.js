@@ -65,7 +65,7 @@ async function loadLibrary() {
     }
     songList.innerHTML = "";
     for (const job of jobs) {
-      const href = job.hub_url || "/song/" + job.job_id;
+      const href = job.player_url || "/player/" + job.job_id;
       const row = document.createElement("a");
       row.className = "song-row";
       row.href = href;
@@ -113,7 +113,7 @@ async function openLatest() {
   setStatus("Loading last song…");
   try {
     const meta = await fetchJSON("/api/jobs/latest");
-    window.location.href = meta.hub_url || "/song/" + meta.job_id;
+    window.location.href = meta.player_url || "/player/" + meta.job_id;
   } catch (e) {
     setStatus(String(e.message || e), true);
   }
@@ -144,9 +144,9 @@ async function pollTask(taskId) {
     if (pollStop) return;
     setProgress(job.progress || 0);
     setStatus(job.message || job.status);
-    if (job.status === "done" && (job.hub_url || job.job_id)) {
+    if (job.status === "done" && (job.player_url || job.job_id)) {
       setBusy(false);
-      window.location.href = job.hub_url || "/song/" + job.job_id;
+      window.location.href = job.player_url || "/player/" + job.job_id;
       return;
     }
     if (job.status === "error") {
