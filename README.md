@@ -10,7 +10,7 @@ Home — YouTube / upload, library, and Loopz:
 
 ![Home screen](docs/home.png)
 
-Stem mixer — Play, BPM / Key, metronome, chords, record takes, presets, faders:
+Stem mixer — Play, BPM / Key, metronome, detect & show chords, record takes, presets, faders:
 
 ![Stem mixer](docs/player-stems.png)
 
@@ -97,11 +97,12 @@ On the other Mac (M1–M4): open the DMG → drag to Applications → right-clic
 
 ## How to use
 
-1. **Home** — paste a YouTube URL or upload audio/video → **Open song**. Library rows open the player. **Stop loading** cancels an in-progress open.
-2. **Player** — stems separate automatically if needed (⋯ menu → **Device** Auto/CPU, **Rerun stems**).
-   - Transport: **Play**, **BPM −/+**, **Key −/+**, metronome, detect / play / show **chords**
-   - ⋯ menu: **Speed**, **HQ speed** (Rubber Band when On)
-   - Mixer: role **presets**, per-stem volume / **Mute** / **Solo**, **Download mix** / **Download stems**
+1. **Home** — paste a YouTube URL or upload audio/video → **Open song**. Clicking a library song opens the **mixer**. **Stop loading** cancels an in-progress open.
+2. **Mixer** — stems separate automatically if needed (progress card at top). When ready:
+   - Transport: **Play**, **BPM −/+**, **Key −/+**, metronome
+   - Chords: **Detect chords**, **Play chords**, **Show chords** (opens the chord list / chart under the transport)
+   - ⋯ menu: **Rerun stems**, **Device** (Auto/CPU), **Detect beats** / **Rerun beats**, **Rerun chords**, **Speed**, **HQ speed** (Rubber Band when On)
+   - Mixer card: role **presets**, per-stem volume / **Mute** / **Solo**, **Download mix** / **Download stems**
    - **Record** → preview → save under **Takes** (headphones recommended)
 3. **Loopz** (from Home) — pick a drum loop, jam chords (piano + bass), tempo / key / metronome; mute kit parts in **Drum mix**.
 4. **Delete** (× on a library row) removes a song.
