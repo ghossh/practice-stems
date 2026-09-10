@@ -1,13 +1,22 @@
 services:
   practice-stems:
     build: .
+    image: practice-stems
     container_name: practice-stems
+    working_dir: /app
     ports:
       - "7860:7860"
-    volumes:
-      # Keep songs / stems on your Mac across rebuilds
-      - ./data:/app/data
     environment:
-      - HOST=0.0.0.0
-      - PORT=7860
+      HOST: "0.0.0.0"
+      PORT: "7860"
+      PYTHONPATH: "/app"
+    volumes:
+      # Songs / stems persist on the host
+      - ./data:/app/data
+      # Live app code — no rebuild needed for Python/JS/HTML changes
+      - ./app.py:/app/app.py:ro
+      - ./pipeline:/app/pipeline:ro
+      - ./static:/app/static:ro
+      # Demucs weights — skip re-download on new containers
+      - ./.cache/torch:/root/.cache/torch
     restart: unless-stopped
