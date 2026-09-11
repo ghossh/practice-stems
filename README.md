@@ -95,6 +95,20 @@ On the other Mac (M1–M4): open the DMG → drag to Applications → right-clic
 
 ---
 
+## GitHub Pages demo
+
+Static mixer + Loopz (no Demucs / uploads). Build or refresh:
+
+```bash
+python3 scripts/build_gh_pages.py
+```
+
+In the repo: **Settings → Pages → Deploy from branch → `/docs`**.
+
+Open `https://<user>.github.io/practice-stems/` — stem demo uses NCS *Fearless pt.II* (see `docs/demo/ATTRIBUTION.md`).
+
+---
+
 ## How to use
 
 1. **Home** — paste a YouTube URL or upload audio/video → **Open song**. Clicking a library song opens the **mixer**. **Stop loading** cancels an in-progress open.

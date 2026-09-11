@@ -19,6 +19,11 @@ data/
 # Vendored Loopz acoustic kit (CC0)
 !static/loopz/kit/
 !static/loopz/kit/*.mp3
+# GitHub Pages static demo stems (built by scripts/build_gh_pages.py)
+!docs/demo/
+!docs/demo/**
+!docs/demo/**/*.mp3
+!docs/static/loopz/kit/*.mp3
 
 # Secrets
 .env
