@@ -970,6 +970,16 @@
     if (starting) return;
     starting = true;
     try {
+      // iOS: resume AudioContext in the tap gesture before any kit fetch awaits.
+      if (!ensureCtx()) {
+        alert("Web Audio is not available in this browser.");
+        return;
+      }
+      if (ctx.state === "suspended") {
+        try {
+          await ctx.resume();
+        } catch (_) {}
+      }
       await start(displayStep < 0);
     } finally {
       starting = false;

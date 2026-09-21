@@ -165,10 +165,32 @@
         </div>
       </div>
 
-      <div class="seek-row">
-        <span class="time" id="tCur">0:00</span>
-        <input type="range" id="seek" min="0" max="1000" value="0" step="1" />
-        <span class="time" id="tDur">0:00</span>
+      <div class="seek-block">
+        <div class="seek-row">
+          <span class="time" id="tCur">0:00</span>
+          <input type="range" id="seek" min="0" max="1000" value="0" step="1" />
+          <span class="time" id="tDur">0:00</span>
+        </div>
+        <div class="activity-row" id="activityRow" hidden>
+          <span class="activity-spacer"></span>
+          <div class="activity-stack">
+            <div class="activity-plot" id="activityPlotWrap" title="Click to jump · drag to loop">
+              <svg id="activityPlot" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+            </div>
+            <div class="activity-legend" id="activityLegend">
+              <label><input type="checkbox" data-series="vocals" checked /><i class="activity-swatch vocals"></i> vocals</label>
+              <label><input type="checkbox" data-series="drums" checked /><i class="activity-swatch drums"></i> drums</label>
+              <label><input type="checkbox" data-series="bass" checked /><i class="activity-swatch bass"></i> bass</label>
+              <label><input type="checkbox" data-series="solo" checked /><i class="activity-swatch solo"></i> solo</label>
+              <label><input type="checkbox" data-series="guitar" checked /><i class="activity-swatch guitar"></i> guitar</label>
+              <label><input type="checkbox" data-series="other" /><i class="activity-swatch other"></i> other</label>
+              <button type="button" class="ghost activity-loop-btn" id="loopClearBtn" hidden>Clear loop</button>
+              <button type="button" class="ghost activity-loop-btn" id="loopDownloadBtn" hidden title="Download selected loop as MP3">Download loop</button>
+              <span class="activity-loop-meta" id="loopMeta"></span>
+            </div>
+          </div>
+          <span class="activity-spacer"></span>
+        </div>
       </div>
 
       <div class="presets" id="presets"></div>
@@ -280,6 +302,13 @@
     const seekEl = document.getElementById("seek");
     const tCur = document.getElementById("tCur");
     const tDur = document.getElementById("tDur");
+    const activityRow = document.getElementById("activityRow");
+    const activityPlot = document.getElementById("activityPlot");
+    const activityPlotWrap = document.getElementById("activityPlotWrap");
+    const activityLegend = document.getElementById("activityLegend");
+    const loopClearBtn = document.getElementById("loopClearBtn");
+    const loopDownloadBtn = document.getElementById("loopDownloadBtn");
+    const loopMeta = document.getElementById("loopMeta");
     const statusEl = document.getElementById("status");
     const detectChordsBtn = document.getElementById("detectChordsBtn");
     const playChordsBtn = document.getElementById("playChordsBtn");
@@ -1095,6 +1124,36 @@
       }
     }
 
+    async function downloadLoop() {
+      if (!BOOT.job_id) return;
+      const range = loopRange();
+      if (!range) {
+        setStatus("Drag the activity plot to select a loop first.");
+        return;
+      }
+      if (loopDownloadBtn) loopDownloadBtn.disabled = true;
+      const dur = duration() || (activityData && activityData.duration_sec) || 0;
+      setStatus("Rendering loop MP3…");
+      try {
+        const res = await fetch("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/export", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...mixPayload(),
+            start_ratio: range[0],
+            end_ratio: range[1],
+          }),
+        });
+        const fname = await saveDownload(res, "loop.mp3");
+        const span = dur > 0 ? " " + fmt(range[0] * dur) + "–" + fmt(range[1] * dur) : "";
+        setStatus("Downloaded " + fname + " (loop" + span + ", current mute/vols).");
+      } catch (e) {
+        setStatus("Download loop failed: " + e.message);
+      } finally {
+        if (loopDownloadBtn) loopDownloadBtn.disabled = false;
+      }
+    }
+
     function anySolo() {
       return Object.values(tracks).some((t) => t.solo);
     }
@@ -1174,6 +1233,36 @@
       refreshButtons();
     }
 
+    async function resumeAudioCtx() {
+      const ctx = ensureMetroCtx();
+      if (ctx && ctx.state === "suspended") {
+        try {
+          await ctx.resume();
+        } catch (_) {}
+      }
+      return ctx;
+    }
+
+    /** iOS/WebKit: play() must run in the user-gesture turn; unlock once so later plays work. */
+    async function unlockStemPlayback(audios) {
+      await resumeAudioCtx();
+      await Promise.all(
+        (audios || []).map(async (a) => {
+          if (!a) return;
+          const wasMuted = a.muted;
+          try {
+            a.muted = true;
+            await a.play();
+            a.pause();
+          } catch (_) {
+            /* ignore — real playAll will surface errors */
+          } finally {
+            a.muted = wasMuted;
+          }
+        })
+      );
+    }
+
     async function resyncActivePlayback() {
       if (!playing) {
         applyAudibility();
@@ -1193,8 +1282,15 @@
       }
       try {
         applyRate();
-        await Promise.all(audios.map((a) => waitForBuffer(a, 30000)));
-        await Promise.all(audios.map((a) => a.play()));
+        await resumeAudioCtx();
+        // Prefer immediate play (iOS); buffer wait after unlock if still needed.
+        const plays = audios.map((a) => a.play());
+        try {
+          await Promise.all(plays);
+        } catch (_) {
+          await Promise.all(audios.map((a) => waitForBuffer(a, 30000)));
+          await Promise.all(audios.map((a) => a.play()));
+        }
       } catch (_) {
         setStatus("Some stems still buffering — may stutter on slow links.");
       }
@@ -1239,17 +1335,20 @@
       }, 500);
       uiTimer = setInterval(updateSeekUI, 200);
       if (metroOn) startMetro();
+      startLoopWatch();
     }
 
     function updateSeekUI() {
-      if (seeking) return;
       const a = masterAudio();
       if (!a) return;
       const dur = duration();
       tDur.textContent = fmt(dur);
-      tCur.textContent = fmt(a.currentTime || 0);
-      if (dur > 0) seekEl.value = String((a.currentTime / dur) * 1000);
-      syncChordsFromAudio();
+      if (!seeking) {
+        tCur.textContent = fmt(a.currentTime || 0);
+        if (dur > 0) seekEl.value = String((a.currentTime / dur) * 1000);
+        syncChordsFromAudio();
+      }
+      updateActivityPlayhead();
     }
 
     async function playAll() {
@@ -1258,20 +1357,31 @@
         setStatus("Unmute at least one stem to play.");
         return;
       }
-      ensureMetroCtx();
+      // Keep AudioContext + element.play() in the click gesture (required on iOS Chrome/Safari).
+      await resumeAudioCtx();
       wireAllStems();
       applyAudibility();
+      applyRate();
+      const audios = actives.map((t) => t.audio);
+      const t0 = audios[0].currentTime || 0;
+      for (const a of audios) {
+        if (Math.abs(a.currentTime - t0) > 0.05) a.currentTime = t0;
+      }
       playBtn.disabled = true;
-      setStatus("Buffering active stems…");
+      setStatus("Starting…");
       try {
-        applyRate();
-        const audios = actives.map((t) => t.audio);
-        const t0 = audios[0].currentTime || 0;
-        for (const a of audios) {
-          if (Math.abs(a.currentTime - t0) > 0.05) a.currentTime = t0;
+        // Start playback immediately — do not await buffering first (breaks iOS gesture).
+        let playErr = null;
+        try {
+          await Promise.all(audios.map((a) => a.play()));
+        } catch (e) {
+          playErr = e;
+          await unlockStemPlayback(audios);
+          await Promise.all(audios.map((a) => waitForBuffer(a, 45000)));
+          await Promise.all(audios.map((a) => a.play()));
+          playErr = null;
         }
-        await Promise.all(audios.map((a) => waitForBuffer(a, 45000)));
-        await Promise.all(audios.map((a) => a.play()));
+        if (playErr) throw playErr;
         playing = true;
         setPlayUi(true);
         startTimers();
@@ -1285,7 +1395,7 @@
       } catch (e) {
         playing = false;
         setPlayUi(false);
-        setStatus("Play failed — wait for buffer or try Wi‑Fi. " + (e.message || e));
+        setStatus("Play failed — tap Play again or try Wi‑Fi. " + (e && e.message ? e.message : e));
       } finally {
         playBtn.disabled = false;
       }
@@ -1296,6 +1406,7 @@
       playing = false;
       setPlayUi(false);
       clearTimers();
+      stopLoopWatch();
       setStatus("Paused");
     }
 
@@ -1308,7 +1419,7 @@
 
     function togglePlay() {
       if (playing) pauseAll();
-      else playAll();
+      else void playAll();
     }
 
     function seekToRatio(ratio) {
@@ -1318,7 +1429,236 @@
       for (const tr of Object.values(tracks)) tr.audio.currentTime = t;
       metroLastBeat = -1;
       lastPlayedChordIdx = -1;
-      updateSeekUI();
+      seekEl.value = String((t / dur) * 1000);
+      tCur.textContent = fmt(t);
+      updateActivityPlayhead();
+      if (!seeking) syncChordsFromAudio();
+    }
+
+    const ACTIVITY_KEYS = ["vocals", "drums", "bass", "solo", "guitar", "other"];
+    let activityData = null;
+    let activityOn = {
+      vocals: true,
+      drums: true,
+      bass: true,
+      solo: true,
+      guitar: true,
+      other: false,
+    };
+    let loopA = null;
+    let loopB = null;
+    let plotDrag = null;
+    let loopRaf = 0;
+    try {
+      const saved = JSON.parse(localStorage.getItem("practiceActivityOn") || "null");
+      if (saved && typeof saved === "object") {
+        for (const k of ACTIVITY_KEYS) {
+          if (typeof saved[k] === "boolean") activityOn[k] = saved[k];
+        }
+        if (saved.guitar == null && typeof saved.solo === "boolean") activityOn.guitar = saved.solo;
+      }
+    } catch (_) {}
+
+    function saveActivityOn() {
+      try { localStorage.setItem("practiceActivityOn", JSON.stringify(activityOn)); } catch (_) {}
+    }
+
+    function syncActivityToggles() {
+      if (!activityLegend) return;
+      activityLegend.querySelectorAll("input[data-series]").forEach((el) => {
+        el.checked = !!activityOn[el.dataset.series];
+      });
+    }
+
+    function loopActive() {
+      return loopA != null && loopB != null && Math.abs(loopB - loopA) > 0.008;
+    }
+
+    function loopRange() {
+      if (!loopActive()) return null;
+      return [Math.min(loopA, loopB), Math.max(loopA, loopB)];
+    }
+
+    function syncLoopUi() {
+      const range = loopRange();
+      if (loopClearBtn) loopClearBtn.hidden = !range;
+      if (loopDownloadBtn) loopDownloadBtn.hidden = !range;
+      if (loopMeta) {
+        if (!range) loopMeta.textContent = "";
+        else {
+          const dur = duration() || (activityData && activityData.duration_sec) || 0;
+          loopMeta.textContent = range
+            ? "Loop " + fmt(range[0] * dur) + "–" + fmt(range[1] * dur)
+            : "";
+        }
+      }
+    }
+
+    function clearLoop() {
+      loopA = loopB = null;
+      plotDrag = null;
+      syncLoopUi();
+      renderActivityPlot();
+      setStatus("Loop cleared");
+    }
+
+    function setLoop(a, b) {
+      const lo = Math.max(0, Math.min(1, Math.min(a, b)));
+      const hi = Math.max(0, Math.min(1, Math.max(a, b)));
+      if (hi - lo < 0.008) return false;
+      loopA = lo;
+      loopB = hi;
+      syncLoopUi();
+      renderActivityPlot();
+      const dur = duration();
+      if (dur > 0) {
+        seekToRatio(lo);
+        setStatus("Loop " + fmt(lo * dur) + "–" + fmt(hi * dur) + " — drag again to change");
+      }
+      if (playing) startLoopWatch();
+      return true;
+    }
+
+    function checkLoopWrap() {
+      const range = loopRange();
+      if (!range || !playing) return;
+      const a = masterAudio();
+      const dur = duration();
+      if (!a || !(dur > 0)) return;
+      const lo = range[0] * dur;
+      const hi = range[1] * dur;
+      if (hi - lo < 0.12) return;
+      const t = a.currentTime || 0;
+      const pad = 0.045 * Math.max(0.5, playbackRate);
+      if (t >= hi - pad || t < lo - 0.04) seekToRatio(range[0]);
+    }
+
+    function startLoopWatch() {
+      if (loopRaf) cancelAnimationFrame(loopRaf);
+      const tick = () => {
+        loopRaf = 0;
+        checkLoopWrap();
+        if (playing && loopActive()) loopRaf = requestAnimationFrame(tick);
+      };
+      if (playing && loopActive()) loopRaf = requestAnimationFrame(tick);
+    }
+
+    function stopLoopWatch() {
+      if (loopRaf) cancelAnimationFrame(loopRaf);
+      loopRaf = 0;
+    }
+
+    function seriesToPolyline(arr, width, height, pad) {
+      const n = (arr || []).length;
+      if (!n) return "";
+      const usable = height - pad * 2;
+      return arr.map((v, i) => {
+        const x = (i / Math.max(n - 1, 1)) * width;
+        const y = height - pad - Math.max(0, Math.min(1, Number(v) || 0)) * usable;
+        return x.toFixed(1) + "," + y.toFixed(1);
+      }).join(" ");
+    }
+
+    function renderActivityPlot(data) {
+      if (data) activityData = data;
+      const src = activityData;
+      if (!activityPlot || !src || !src.vocals || !src.vocals.length) {
+        if (activityRow) activityRow.hidden = true;
+        return;
+      }
+      syncActivityToggles();
+      const W = 1000, H = 100, pad = 8;
+      const parts = [];
+      const order = ["drums", "bass", "other", "guitar", "vocals", "solo"];
+      for (const key of order) {
+        const series = src[key];
+        if (!activityOn[key] || !series || !series.length) continue;
+        parts.push(
+          '<polyline class="' + key + '" points="' + seriesToPolyline(series, W, H, pad) + '"></polyline>'
+        );
+      }
+      const range = loopRange();
+      const dragRange =
+        plotDrag && plotDrag.moved
+          ? [Math.min(plotDrag.start, plotDrag.last), Math.max(plotDrag.start, plotDrag.last)]
+          : null;
+      const vis = dragRange || range;
+      if (vis && vis[1] - vis[0] > 0.004) {
+        const x = vis[0] * W;
+        const w = (vis[1] - vis[0]) * W;
+        parts.push(
+          '<rect class="activity-loop" x="' +
+            x.toFixed(1) +
+            '" y="0" width="' +
+            w.toFixed(1) +
+            '" height="' +
+            H +
+            '"></rect>'
+        );
+      }
+      parts.push('<line class="activity-playhead" id="activityPlayhead" x1="0" y1="0" x2="0" y2="' + H + '"></line>');
+      activityPlot.innerHTML = parts.join("");
+      if (activityRow) activityRow.hidden = false;
+      syncLoopUi();
+      updateActivityPlayhead();
+    }
+
+    function updateActivityPlayhead() {
+      const line = document.getElementById("activityPlayhead");
+      if (!line) return;
+      const dur = duration();
+      let ratio = 0;
+      if (dur > 0) {
+        if (seeking) ratio = parseInt(seekEl.value, 10) / 1000;
+        else {
+          const a = masterAudio();
+          if (a) ratio = (a.currentTime || 0) / dur;
+        }
+      }
+      const x = Math.max(0, Math.min(1000, ratio * 1000));
+      line.setAttribute("x1", x.toFixed(1));
+      line.setAttribute("x2", x.toFixed(1));
+    }
+
+    function activityRatioFromEvent(ev) {
+      if (!activityPlotWrap) return 0;
+      const r = activityPlotWrap.getBoundingClientRect();
+      if (!(r.width > 0)) return 0;
+      return Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+    }
+
+    function activityIsComplete(data) {
+      return !!(
+        data &&
+        data.vocals &&
+        data.vocals.length &&
+        data.drums &&
+        data.drums.length &&
+        data.bass &&
+        data.bass.length &&
+        data.guitar &&
+        data.guitar.length
+      );
+    }
+
+    async function ensureActivityProfile() {
+      if (activityIsComplete(BOOT.activity)) {
+        renderActivityPlot(BOOT.activity);
+        return;
+      }
+      if (!BOOT.job_id || BOOT.static_demo) {
+        if (BOOT.activity) renderActivityPlot(BOOT.activity);
+        return;
+      }
+      try {
+        const r = await fetchJSON("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/activity", {
+          method: "POST",
+        });
+        BOOT.activity = r;
+        renderActivityPlot(r);
+      } catch (_) {
+        if (BOOT.activity) renderActivityPlot(BOOT.activity);
+      }
     }
 
     function refreshButtons() {
@@ -2287,6 +2627,7 @@
       applyAudibility();
       setStatus("Ready — " + names.length + " stems. Change Key while playing.");
       ensureKeyDetected();
+      ensureActivityProfile();
 
       const master = tracks[names[0]].audio;
       master.addEventListener("loadedmetadata", updateSeekUI);
@@ -2435,6 +2776,46 @@
       seekToRatio(parseInt(seekEl.value, 10) / 1000);
       seeking = false;
     });
+    if (activityPlotWrap) {
+      activityPlotWrap.addEventListener("pointerdown", (ev) => {
+        const ratio = activityRatioFromEvent(ev);
+        plotDrag = { start: ratio, last: ratio, moved: false };
+        try { activityPlotWrap.setPointerCapture(ev.pointerId); } catch (_) {}
+      });
+      activityPlotWrap.addEventListener("pointermove", (ev) => {
+        if (!plotDrag) return;
+        const ratio = activityRatioFromEvent(ev);
+        plotDrag.last = ratio;
+        if (Math.abs(ratio - plotDrag.start) > 0.012) {
+          plotDrag.moved = true;
+          renderActivityPlot();
+        }
+      });
+      activityPlotWrap.addEventListener("pointerup", (ev) => {
+        const drag = plotDrag;
+        plotDrag = null;
+        if (!drag) return;
+        const ratio = activityRatioFromEvent(ev);
+        if (drag.moved && setLoop(drag.start, ratio)) return;
+        seekToRatio(drag.moved ? drag.start : ratio);
+        renderActivityPlot();
+      });
+      activityPlotWrap.addEventListener("pointercancel", () => {
+        plotDrag = null;
+        renderActivityPlot();
+      });
+    }
+    if (loopClearBtn) loopClearBtn.onclick = clearLoop;
+    if (loopDownloadBtn) loopDownloadBtn.onclick = downloadLoop;
+    if (activityLegend) {
+      activityLegend.addEventListener("change", (ev) => {
+        const el = ev.target;
+        if (!el || !el.dataset || !el.dataset.series) return;
+        activityOn[el.dataset.series] = !!el.checked;
+        saveActivityOn();
+        renderActivityPlot();
+      });
+    }
 
     init();
   </script>

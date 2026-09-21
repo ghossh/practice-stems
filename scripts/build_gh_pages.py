@@ -31,6 +31,7 @@ STATIC_SHIM = r"""
       }
       downloadMix = async () => blocked("Download mix");
       downloadStems = async () => blocked("Download stems");
+      downloadLoop = async () => blocked("Download loop");
       runStems = async () => blocked("Stem separation");
       runBeats = async () => blocked("Beat detect");
       runChords = async () => blocked("Chord detect");
@@ -53,6 +54,7 @@ STATIC_SHIM = r"""
       // Re-bind handlers (onclick already pointed at the original functions)
       if (downloadBtn) downloadBtn.onclick = downloadMix;
       if (downloadStemsBtn) downloadStemsBtn.onclick = downloadStems;
+      if (loopDownloadBtn) loopDownloadBtn.onclick = downloadLoop;
       if (detectChordsBtn) detectChordsBtn.onclick = runChords;
       if (rerunStemsBtn) rerunStemsBtn.onclick = () => { setMoreOpen(false); runStems(true); };
       if (rerunBeatsBtn) rerunBeatsBtn.onclick = () => { setMoreOpen(false); runBeats(); };
@@ -157,6 +159,7 @@ def build_boot() -> dict:
         "chord_count": meta.get("chord_count") or len(meta.get("chords") or []),
         "key": meta.get("key"),
         "key_meta": meta.get("key_meta"),
+        "activity": meta.get("activity"),
         "stems": stems,
         "stem_order": STEM_ORDER,
         "recordings": [],

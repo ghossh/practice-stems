@@ -1174,6 +1174,36 @@
       refreshButtons();
     }
 
+    async function resumeAudioCtx() {
+      const ctx = ensureMetroCtx();
+      if (ctx && ctx.state === "suspended") {
+        try {
+          await ctx.resume();
+        } catch (_) {}
+      }
+      return ctx;
+    }
+
+    /** iOS/WebKit: play() must run in the user-gesture turn; unlock once so later plays work. */
+    async function unlockStemPlayback(audios) {
+      await resumeAudioCtx();
+      await Promise.all(
+        (audios || []).map(async (a) => {
+          if (!a) return;
+          const wasMuted = a.muted;
+          try {
+            a.muted = true;
+            await a.play();
+            a.pause();
+          } catch (_) {
+            /* ignore — real playAll will surface errors */
+          } finally {
+            a.muted = wasMuted;
+          }
+        })
+      );
+    }
+
     async function resyncActivePlayback() {
       if (!playing) {
         applyAudibility();
@@ -1193,8 +1223,15 @@
       }
       try {
         applyRate();
-        await Promise.all(audios.map((a) => waitForBuffer(a, 30000)));
-        await Promise.all(audios.map((a) => a.play()));
+        await resumeAudioCtx();
+        // Prefer immediate play (iOS); buffer wait after unlock if still needed.
+        const plays = audios.map((a) => a.play());
+        try {
+          await Promise.all(plays);
+        } catch (_) {
+          await Promise.all(audios.map((a) => waitForBuffer(a, 30000)));
+          await Promise.all(audios.map((a) => a.play()));
+        }
       } catch (_) {
         setStatus("Some stems still buffering — may stutter on slow links.");
       }
@@ -1258,20 +1295,31 @@
         setStatus("Unmute at least one stem to play.");
         return;
       }
-      ensureMetroCtx();
+      // Keep AudioContext + element.play() in the click gesture (required on iOS Chrome/Safari).
+      await resumeAudioCtx();
       wireAllStems();
       applyAudibility();
+      applyRate();
+      const audios = actives.map((t) => t.audio);
+      const t0 = audios[0].currentTime || 0;
+      for (const a of audios) {
+        if (Math.abs(a.currentTime - t0) > 0.05) a.currentTime = t0;
+      }
       playBtn.disabled = true;
-      setStatus("Buffering active stems…");
+      setStatus("Starting…");
       try {
-        applyRate();
-        const audios = actives.map((t) => t.audio);
-        const t0 = audios[0].currentTime || 0;
-        for (const a of audios) {
-          if (Math.abs(a.currentTime - t0) > 0.05) a.currentTime = t0;
+        // Start playback immediately — do not await buffering first (breaks iOS gesture).
+        let playErr = null;
+        try {
+          await Promise.all(audios.map((a) => a.play()));
+        } catch (e) {
+          playErr = e;
+          await unlockStemPlayback(audios);
+          await Promise.all(audios.map((a) => waitForBuffer(a, 45000)));
+          await Promise.all(audios.map((a) => a.play()));
+          playErr = null;
         }
-        await Promise.all(audios.map((a) => waitForBuffer(a, 45000)));
-        await Promise.all(audios.map((a) => a.play()));
+        if (playErr) throw playErr;
         playing = true;
         setPlayUi(true);
         startTimers();
@@ -1285,7 +1333,7 @@
       } catch (e) {
         playing = false;
         setPlayUi(false);
-        setStatus("Play failed — wait for buffer or try Wi‑Fi. " + (e.message || e));
+        setStatus("Play failed — tap Play again or try Wi‑Fi. " + (e && e.message ? e.message : e));
       } finally {
         playBtn.disabled = false;
       }
@@ -1308,7 +1356,7 @@
 
     function togglePlay() {
       if (playing) pauseAll();
-      else playAll();
+      else void playAll();
     }
 
     function seekToRatio(ratio) {

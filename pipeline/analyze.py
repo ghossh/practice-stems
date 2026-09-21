@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from .jobs import INCOMING, PLAY, find_stem_wavs, read_job_meta, source_wav_path
+from .jobs import INCOMING, PLAY, find_stem_wavs, read_job_meta, source_wav_path, stem_wavs_for_job
 
 # Prefer harmonic content for chord recognition (skip drums / vocals)
 _HARMONIC_STEMS = ("guitar", "piano", "other", "bass")
@@ -521,3 +521,123 @@ def detect_chords_for_job(job_id: str) -> dict:
         result["key"] = key_est.get("key")
         result["key_meta"] = key_est
     return result
+
+
+_LEAD_STEMS = ("guitar", "other", "piano")
+_OTHER_LEAD_STEMS = ("other", "piano")
+_ACTIVITY_BINS = 360
+_ACTIVITY_SR = 11025
+
+
+def _smooth(x, win: int = 7):
+    import numpy as np
+
+    if x.size < 3 or win < 2:
+        return x
+    win = min(int(win), x.size)
+    if win % 2 == 0:
+        win += 1
+    kernel = np.ones(win, dtype=float) / win
+    return np.convolve(x, kernel, mode="same")
+
+
+def _norm99(x):
+    import numpy as np
+
+    peak = float(np.percentile(x, 96)) if x.size else 0.0
+    if peak < 1e-8:
+        return np.zeros_like(x, dtype=float)
+    return np.clip(x / peak, 0.0, 1.0)
+
+
+def _rms_bins(y, n_bins: int):
+    import numpy as np
+
+    if y is None or y.size < 32:
+        return np.zeros(n_bins, dtype=float)
+    idx = np.linspace(0, y.size, n_bins + 1).astype(int)
+    out = np.empty(n_bins, dtype=float)
+    for i, (a, b) in enumerate(zip(idx[:-1], idx[1:])):
+        sl = y[a:b]
+        out[i] = float(np.sqrt(np.mean(sl * sl))) if sl.size else 0.0
+    return out
+
+
+def _load_stem_mono(job_id: str, name: str, wavs: dict, sr: int):
+    import librosa
+
+    path = wavs.get(name)
+    if path is None or not path.is_file():
+        mp3 = PLAY / job_id / f"{name}.mp3"
+        path = mp3 if mp3.is_file() else None
+    if path is None:
+        return None
+    y, _sr = librosa.load(str(path), sr=sr, mono=True)
+    return y
+
+
+def detect_activity_profile_for_job(job_id: str, n_bins: int = _ACTIVITY_BINS) -> dict:
+    """RMS line-plot data: vocals, guitar, other, drums, bass."""
+    import numpy as np
+
+    wavs = stem_wavs_for_job(job_id)
+    stem_y = {
+        name: _load_stem_mono(job_id, name, wavs, _ACTIVITY_SR)
+        for name in ("vocals", "drums", "bass", "guitar", "other", "piano")
+    }
+    loaded = [y for y in stem_y.values() if y is not None]
+    if not loaded:
+        raise FileNotFoundError("Need stems for activity plot")
+
+    n_ref = max(y.size for y in loaded)
+    duration = round(n_ref / float(_ACTIVITY_SR), 2) if n_ref else 0.0
+
+    def _env(name: str):
+        return _norm99(_smooth(_rms_bins(stem_y.get(name), n_bins), 9))
+
+    vocal_n = _env("vocals")
+    drums_n = _env("drums")
+    bass_n = _env("bass")
+    guitar_n = _env("guitar")
+    other_parts = [
+        _rms_bins(stem_y[name], n_bins)
+        for name in _OTHER_LEAD_STEMS
+        if stem_y.get(name) is not None
+    ]
+    other_n = (
+        _norm99(_smooth(np.stack(other_parts).max(axis=0), 9))
+        if other_parts
+        else np.zeros(n_bins, dtype=float)
+    )
+    lead_parts = [
+        _rms_bins(stem_y[name], n_bins)
+        for name in _LEAD_STEMS
+        if stem_y.get(name) is not None
+    ]
+    lead_n = (
+        _norm99(_smooth(np.stack(lead_parts).max(axis=0), 9))
+        if lead_parts
+        else np.zeros(n_bins, dtype=float)
+    )
+
+    def _gated_lead(series):
+        s = series * (1.0 - np.power(vocal_n, 1.2) * 0.85)
+        s = s * (0.35 + 0.65 * series)
+        return _norm99(_smooth(s, 7))
+
+    def _series(arr) -> list[float]:
+        return [round(float(v), 3) for v in arr]
+
+    guitar = _gated_lead(guitar_n)
+    other = _gated_lead(other_n)
+    solo = _gated_lead(lead_n)
+    return {
+        "n": n_bins,
+        "duration_sec": duration,
+        "vocals": _series(vocal_n),
+        "solo": _series(solo),
+        "guitar": _series(guitar),
+        "other": _series(other),
+        "drums": _series(drums_n),
+        "bass": _series(bass_n),
+    }

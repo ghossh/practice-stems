@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import base64
 import json
 import os
 import re
-import secrets
 import shutil
 import subprocess
 import threading
@@ -21,13 +19,15 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
 
 from pipeline.device import device_label, pick_device
 from pipeline.download import download_audio
-from pipeline.analyze import detect_bpm, detect_chords_for_job, detect_key_for_job
+from pipeline.analyze import (
+    detect_activity_profile_for_job,
+    detect_bpm,
+    detect_chords_for_job,
+    detect_key_for_job,
+)
 from pipeline.jobs import (
     DATA,
     INCOMING,
@@ -63,6 +63,8 @@ class MixExportBody(BaseModel):
     muted: dict[str, bool] = Field(default_factory=dict)
     solo: dict[str, bool] = Field(default_factory=dict)
     speed: float = 1.0
+    start_ratio: float | None = None
+    end_ratio: float | None = None
 
 
 class StretchBody(BaseModel):
@@ -78,59 +80,8 @@ class PitchBody(BaseModel):
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
 
-
-def _load_dotenv() -> None:
-    """Load ROOT/.env into os.environ (does not override existing vars)."""
-    path = ROOT / ".env"
-    if not path.is_file():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, val = line.partition("=")
-        key = key.strip()
-        if not key or key in os.environ:
-            continue
-        val = val.strip()
-        if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
-            val = val[1:-1]
-        os.environ[key] = val
-
-
-_load_dotenv()
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "7860"))
-APP_USER = os.environ.get("APP_USER", "admin").strip() or "admin"
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
-
-
-def _basic_auth_ok(request: Request) -> bool:
-    if not APP_PASSWORD:
-        return True
-    header = request.headers.get("authorization", "")
-    if not header.lower().startswith("basic "):
-        return False
-    try:
-        raw = base64.b64decode(header.split(" ", 1)[1].encode()).decode("utf-8")
-        user, _, password = raw.partition(":")
-        return secrets.compare_digest(user, APP_USER) and secrets.compare_digest(
-            password, APP_PASSWORD
-        )
-    except Exception:
-        return False
-
-
-class BasicAuthMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        if _basic_auth_ok(request):
-            return await call_next(request)
-        return Response(
-            status_code=401,
-            headers={"WWW-Authenticate": 'Basic realm="Practice Stems"'},
-            content="Authentication required",
-            media_type="text/plain",
-        )
 
 _jobs_lock = threading.Lock()
 _jobs: dict[str, dict] = {}
@@ -218,6 +169,13 @@ def _run_separate(task_id: str, source_wav: Path, title: str, device_choice: str
         job_id = stage_playable(title, stem_wavs, stems_dir=stems_dir)
 
         _check_cancel(task_id)
+        _set_job(task_id, progress=0.92, message="Mapping vocals & solos…")
+        try:
+            patch_job_meta(job_id, activity=detect_activity_profile_for_job(job_id))
+        except Exception:
+            pass
+
+        _check_cancel(task_id)
         _set_job(
             task_id,
             status="done",
@@ -277,8 +235,6 @@ async def _lifespan(_app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Practice Stems", lifespan=_lifespan)
-    if APP_PASSWORD:
-        app.add_middleware(BasicAuthMiddleware)
 
     @app.get("/", response_class=HTMLResponse)
     async def home():
@@ -464,6 +420,21 @@ def create_app() -> FastAPI:
         patch_job_meta(job_id, key=result["key"], key_meta=result)
         return {"job_id": job_id, **result}
 
+    @app.post("/api/jobs/{job_id}/activity")
+    async def api_detect_activity(job_id: str):
+        if not re.fullmatch(r"[A-Za-z0-9_\-]+", job_id):
+            raise HTTPException(400, "bad job id")
+        if not (PLAY / job_id).is_dir():
+            raise HTTPException(404, "song not found")
+        try:
+            result = detect_activity_profile_for_job(job_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(500, f"Activity plot failed: {exc}") from exc
+        patch_job_meta(job_id, activity=result)
+        return {"job_id": job_id, **result}
+
     @app.post("/api/jobs/{job_id}/stretch")
     async def api_stretch_stems(job_id: str, body: StretchBody):
         """HQ time-stretch and/or key transpose for practice playback."""
@@ -577,6 +548,8 @@ def create_app() -> FastAPI:
                 muted=body.muted,
                 solo=body.solo,
                 speed=speed,
+                start_ratio=body.start_ratio,
+                end_ratio=body.end_ratio,
             )
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
@@ -802,8 +775,6 @@ app = create_app()
 
 def main() -> None:
     print(f"Practice Stems → http://{HOST}:{PORT}")
-    if APP_PASSWORD:
-        print(f"Password protection on (user: {APP_USER})")
     uvicorn.run(app, host=HOST, port=PORT, log_level="info")
 
 

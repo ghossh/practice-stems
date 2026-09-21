@@ -48,8 +48,6 @@ Open http://127.0.0.1:7860
 
 Needs network for YouTube + first Demucs model download. For HQ slowdown: `brew install rubberband` (CLI on PATH). The `.app` build bundles rubberband.
 
-Optional password (e.g. Cloudflare Tunnel): copy `.env.example` → `.env` and set `APP_PASSWORD`.
-
 ### 2 — Docker (portable / CPU)
 
 **Start a Docker engine** (Colima or Docker Desktop). Colima needs **≥ 8 GiB RAM** or Demucs OOMs:
