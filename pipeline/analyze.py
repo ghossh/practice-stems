@@ -563,34 +563,16 @@ def _rms_bins(y, n_bins: int):
     return out
 
 
-def _load_stem_mono(job_id: str, name: str, wavs: dict, sr: int):
-    import librosa
-
-    path = wavs.get(name)
-    if path is None or not path.is_file():
-        mp3 = PLAY / job_id / f"{name}.mp3"
-        path = mp3 if mp3.is_file() else None
-    if path is None:
-        return None
-    y, _sr = librosa.load(str(path), sr=sr, mono=True)
-    return y
-
-
-def detect_activity_profile_for_job(job_id: str, n_bins: int = _ACTIVITY_BINS) -> dict:
-    """RMS line-plot data: vocals, guitar, other, drums, bass."""
+def activity_profile_from_samples(stem_y: dict, sr: int, n_bins: int = _ACTIVITY_BINS) -> dict:
+    """RMS line-plot data from mono sample arrays."""
     import numpy as np
 
-    wavs = stem_wavs_for_job(job_id)
-    stem_y = {
-        name: _load_stem_mono(job_id, name, wavs, _ACTIVITY_SR)
-        for name in ("vocals", "drums", "bass", "guitar", "other", "piano")
-    }
-    loaded = [y for y in stem_y.values() if y is not None]
+    loaded = [y for y in stem_y.values() if y is not None and getattr(y, "size", 0)]
     if not loaded:
         raise FileNotFoundError("Need stems for activity plot")
 
     n_ref = max(y.size for y in loaded)
-    duration = round(n_ref / float(_ACTIVITY_SR), 2) if n_ref else 0.0
+    duration = round(n_ref / float(sr), 2) if n_ref else 0.0
 
     def _env(name: str):
         return _norm99(_smooth(_rms_bins(stem_y.get(name), n_bins), 9))
@@ -641,3 +623,32 @@ def detect_activity_profile_for_job(job_id: str, n_bins: int = _ACTIVITY_BINS) -
         "drums": _series(drums_n),
         "bass": _series(bass_n),
     }
+
+
+def activity_profile_from_paths(paths: dict, n_bins: int = _ACTIVITY_BINS) -> dict:
+    """RMS line-plot data from stem files (wav or mp3)."""
+    import librosa
+
+    stem_y = {}
+    for name in ("vocals", "drums", "bass", "guitar", "other", "piano"):
+        path = paths.get(name)
+        if path is None or not Path(path).is_file():
+            stem_y[name] = None
+            continue
+        y, _sr = librosa.load(str(path), sr=_ACTIVITY_SR, mono=True)
+        stem_y[name] = y
+    return activity_profile_from_samples(stem_y, _ACTIVITY_SR, n_bins)
+
+
+def detect_activity_profile_for_job(job_id: str, n_bins: int = _ACTIVITY_BINS) -> dict:
+    """RMS line-plot data: vocals, guitar, other, drums, bass."""
+    wavs = stem_wavs_for_job(job_id)
+    paths = {}
+    for name in ("vocals", "drums", "bass", "guitar", "other", "piano"):
+        path = wavs.get(name)
+        if path is None or not path.is_file():
+            mp3 = PLAY / job_id / f"{name}.mp3"
+            path = mp3 if mp3.is_file() else None
+        if path is not None:
+            paths[name] = path
+    return activity_profile_from_paths(paths, n_bins)

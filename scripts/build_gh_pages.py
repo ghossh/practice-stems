@@ -9,9 +9,13 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 DOCS = ROOT / "docs"
 STATIC = ROOT / "static"
 SRC_JOB = (
@@ -162,6 +166,73 @@ def existing_boot() -> dict | None:
     return boot if isinstance(boot, dict) else None
 
 
+def _activity_ok(data) -> bool:
+    if not isinstance(data, dict):
+        return False
+    return all(isinstance(data.get(name), list) and data[name] for name in ("vocals", "drums", "bass", "guitar"))
+
+
+def attach_activity(boot: dict) -> dict:
+    if _activity_ok(boot.get("activity")):
+        return boot
+    folder = DOCS / "demo" / DEMO_ID
+    cached = folder / "activity.json"
+    if cached.is_file():
+        try:
+            saved = json.loads(cached.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            saved = None
+        if _activity_ok(saved):
+            boot["activity"] = saved
+            return boot
+    paths = {
+        name: folder / f"{name}.mp3"
+        for name in ("vocals", "drums", "bass", "guitar", "other", "piano")
+    }
+    if not paths["vocals"].is_file():
+        print("  activity plot skipped: demo stems missing")
+        return boot
+    try:
+        import numpy as np
+
+        from pipeline.analyze import _ACTIVITY_SR, activity_profile_from_samples
+    except Exception as exc:
+        print(f"  activity plot skipped: {exc}")
+        return boot
+
+    def load_mp3(path: Path):
+        if not path.is_file():
+            return None
+        proc = subprocess.run(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-i",
+                str(path),
+                "-ac",
+                "1",
+                "-ar",
+                str(_ACTIVITY_SR),
+                "-f",
+                "f32le",
+                "-",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        if not proc.stdout:
+            return None
+        return np.frombuffer(proc.stdout, dtype=np.float32).copy()
+
+    stem_y = {name: load_mp3(path) for name, path in paths.items()}
+    profile = activity_profile_from_samples(stem_y, _ACTIVITY_SR)
+    boot["activity"] = profile
+    cached.write_text(json.dumps(profile), encoding="utf-8")
+    print(f"  baked activity plot ({profile.get('n')} bins)")
+    return boot
+
+
 def build_boot() -> dict:
     meta_path = SRC_JOB / "meta.json"
     if not meta_path.is_file():
@@ -170,10 +241,10 @@ def build_boot() -> dict:
             raise SystemExit(f"Missing demo metadata: {meta_path}")
         boot["static_demo"] = True
         boot["recordings"] = []
-        return boot
+        return attach_activity(boot)
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     stems = {name: f"demo/{DEMO_ID}/{name}.mp3" for name in STEM_ORDER}
-    return {
+    boot = {
         "job_id": DEMO_ID,
         "title": meta.get("title")
         or "Lost Sky - Fearless pt.II (feat. Chris Linton) [NCS]",
@@ -202,6 +273,7 @@ def build_boot() -> dict:
         "recordings": [],
         "static_demo": True,
     }
+    return attach_activity(boot)
 
 
 def write_player(boot: dict) -> None:
