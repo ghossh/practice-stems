@@ -71,7 +71,8 @@
         </div>
         <div class="transport-record">
           <div class="record-wrap">
-            <button type="button" class="record-btn" id="recordBtn" aria-label="Record">● Record</button>
+            <button type="button" class="record-btn" id="recordBtn" aria-label="Record audio">● Record audio</button>
+            <button type="button" class="record-btn" id="recordVideoBtn" aria-label="Record video">● Record video</button>
             <select id="micSel" title="Microphone" aria-label="Microphone">
               <option value="">Default microphone</option>
             </select>
@@ -85,6 +86,10 @@
               <input type="range" id="masterVol" min="0" max="1.5" step="0.05" value="1" />
               <span class="rec-gain-val" id="masterVolVal">100%</span>
             </label>
+          </div>
+          <div class="cam-preview" id="camPreview" hidden>
+            <video id="camVideo" autoplay playsinline muted></video>
+            <span class="cam-preview-badge">REC</span>
           </div>
         </div>
       </div>
@@ -209,7 +214,7 @@
       <div class="rec-strip" id="recStrip" hidden>
         <span class="rec-dot" aria-hidden="true"></span>
         <span class="rec-timer" id="recTimer">0:00</span>
-        <span class="rec-strip-lab">Recording</span>
+        <span class="rec-strip-lab" id="recStripLab">Recording</span>
         <span class="rec-mic-lab" id="recMicLab"></span>
         <button type="button" class="ghost" id="recStripStop">Stop</button>
       </div>
@@ -219,6 +224,7 @@
           <span class="takes-hint">Listen first, then save or discard</span>
         </div>
         <audio id="previewTake" controls preload="auto"></audio>
+        <video id="previewVideo" class="take-video" controls playsinline hidden></video>
         <div class="take-preview-actions">
           <button type="button" class="primary" id="saveTakeBtn">Save take</button>
           <button type="button" id="discardTakeBtn">Discard</button>
@@ -241,6 +247,7 @@
     </section>
   </div>
 
+  <script src="/static/lame.min.js"></script>
   <script>
     const BOOT = __BOOT_JSON__;
 
@@ -277,6 +284,9 @@
 
     const playBtn = document.getElementById("playBtn");
     const recordBtn = document.getElementById("recordBtn");
+    const recordVideoBtn = document.getElementById("recordVideoBtn");
+    const camPreview = document.getElementById("camPreview");
+    const camVideo = document.getElementById("camVideo");
     const resetBtn = document.getElementById("resetBtn");
     const downloadBtn = document.getElementById("downloadBtn");
     const downloadStemsBtn = document.getElementById("downloadStemsBtn");
@@ -338,6 +348,7 @@
     const takesList = document.getElementById("takesList");
     const takesCount = document.getElementById("takesCount");
     const recStrip = document.getElementById("recStrip");
+    const recStripLab = document.getElementById("recStripLab");
     const recTimerEl = document.getElementById("recTimer");
     const recStripStop = document.getElementById("recStripStop");
     const recMicLab = document.getElementById("recMicLab");
@@ -347,6 +358,7 @@
     const masterVolEl = document.getElementById("masterVol");
     const masterVolVal = document.getElementById("masterVolVal");
     const takePreview = document.getElementById("takePreview");
+    const previewVideo = document.getElementById("previewVideo");
     const previewTake = document.getElementById("previewTake");
     const saveTakeBtn = document.getElementById("saveTakeBtn");
     const discardTakeBtn = document.getElementById("discardTakeBtn");
@@ -387,6 +399,8 @@
     let micGain = null;
     let micSource = null;
     let micStream = null;
+    let camStream = null;
+    let recordKind = "audio";
     let recDest = null;
     let mediaRecorder = null;
     let recChunks = [];
@@ -1296,9 +1310,41 @@
       }
     }
 
+    function stemLevel(t, on) {
+      const level = on ? Math.min(1, Math.max(0, t.vol)) : 0;
+      if (t.gainNode) {
+        t.gainNode.gain.value = level;
+        t.audio.volume = 1;
+      } else {
+        t.audio.volume = level;
+      }
+      t.audio.muted = false;
+    }
+
     function onMixChange() {
-      if (playing) resyncActivePlayback();
-      else applyAudibility();
+      if (!playing) {
+        applyAudibility();
+        return;
+      }
+      const names = activeStemNames();
+      if (!names.length) {
+        pauseAll();
+        setStatus("All stems muted.");
+        return;
+      }
+      const master = masterAudio();
+      const t0 = master ? master.currentTime : 0;
+      for (const [name, t] of Object.entries(tracks)) {
+        const on = names.includes(name);
+        stemLevel(t, on);
+        if (!on || !t.audio.paused) continue;
+        t.audio.preload = "auto";
+        if (Number.isFinite(t0) && Math.abs(t.audio.currentTime - t0) > 0.05) {
+          t.audio.currentTime = t0;
+        }
+        t.audio.play().catch(() => {});
+      }
+      refreshButtons();
     }
 
     function masterAudio() {
@@ -2151,11 +2197,25 @@
     }
 
     function syncRecordLabel() {
-      if (!recordBtn) return;
       const mic = currentMicLabel();
-      recordBtn.textContent = recording ? "● Stop" : "● Record";
-      recordBtn.title = (recording ? "Stop recording" : "Record") + " · " + mic;
+      if (recordBtn) {
+        const on = recording && recordKind === "audio";
+        recordBtn.textContent = on ? "● Stop" : "● Record audio";
+        recordBtn.classList.toggle("on", on);
+        recordBtn.disabled = recording && recordKind !== "audio";
+        recordBtn.setAttribute("aria-label", on ? "Stop recording" : "Record audio");
+        recordBtn.title = (on ? "Stop recording" : "Record audio") + " · " + mic;
+      }
+      if (recordVideoBtn) {
+        const on = recording && recordKind === "video";
+        recordVideoBtn.textContent = on ? "● Stop" : "● Record video";
+        recordVideoBtn.classList.toggle("on", on);
+        recordVideoBtn.disabled = recording && recordKind !== "video";
+        recordVideoBtn.setAttribute("aria-label", on ? "Stop recording" : "Record video");
+        recordVideoBtn.title = on ? "Stop recording" : "Record video with live camera preview";
+      }
       if (recMicLab) recMicLab.textContent = mic;
+      if (recStripLab) recStripLab.textContent = recordKind === "video" ? "Recording video" : "Recording";
     }
 
     async function refreshMics() {
@@ -2206,11 +2266,16 @@
         tdWhen.textContent = fmtWhen(rec.created);
         const tdPlay = document.createElement("td");
         tdPlay.className = "take-play";
-        const audio = document.createElement("audio");
-        audio.controls = true;
-        audio.preload = "metadata";
-        audio.src = rec.url;
-        tdPlay.appendChild(audio);
+        const isVideo = /\.(mp4|webm)$/i.test(rec.name || "");
+        const media = document.createElement(isVideo ? "video" : "audio");
+        media.controls = true;
+        media.preload = "metadata";
+        if (isVideo) {
+          media.className = "take-video";
+          media.playsInline = true;
+        }
+        media.src = rec.url;
+        tdPlay.appendChild(media);
         const tdDel = document.createElement("td");
         tdDel.className = "take-del-cell";
         const del = document.createElement("button");
@@ -2243,12 +2308,17 @@
       }
     }
 
+    function clearPreviewEl(el) {
+      if (!el) return;
+      el.pause();
+      el.removeAttribute("src");
+      el.load();
+      el.hidden = true;
+    }
+
     function discardPendingTake() {
-      if (previewTake) {
-        previewTake.pause();
-        previewTake.removeAttribute("src");
-        previewTake.load();
-      }
+      clearPreviewEl(previewTake);
+      clearPreviewEl(previewVideo);
       if (pendingTake && pendingTake.url) URL.revokeObjectURL(pendingTake.url);
       pendingTake = null;
       if (takePreview) takePreview.hidden = true;
@@ -2257,14 +2327,26 @@
     function showPendingTake(blob, mime) {
       discardPendingTake();
       const url = URL.createObjectURL(blob);
-      pendingTake = { blob, mime, url };
-      if (previewTake) {
-        previewTake.src = url;
-        previewTake.load();
+      const isVideo = String(mime || "").startsWith("video/");
+      pendingTake = { blob, mime, url, isVideo };
+      const el = isVideo ? previewVideo : previewTake;
+      if (el) {
+        el.hidden = false;
+        el.src = url;
+        el.load();
       }
       if (takePreview) takePreview.hidden = false;
       takePreview.scrollIntoView({ behavior: "smooth", block: "nearest" });
       setStatus("Preview your take, then Save or Discard.");
+    }
+
+    function pendingFilename() {
+      const mime = (pendingTake && pendingTake.mime) || "";
+      if (pendingTake && pendingTake.isVideo) return mime.includes("mp4") ? "video.mp4" : "video.webm";
+      if (mime.includes("mpeg") || mime.includes("mp3")) return "take.mp3";
+      if (mime.includes("ogg")) return "take.ogg";
+      if (mime.includes("mp4")) return "take.m4a";
+      return "take.webm";
     }
 
     async function savePendingTake() {
@@ -2273,9 +2355,7 @@
       setStatus("Saving take…");
       try {
         const body = new FormData();
-        const mime = pendingTake.mime || "audio/webm";
-        const ext = mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm";
-        body.append("file", pendingTake.blob, "take." + ext);
+        body.append("file", pendingTake.blob, pendingFilename());
         const info = await fetchJSON("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/recordings", {
           method: "POST",
           body,
@@ -2290,25 +2370,147 @@
       }
     }
 
-    function pickRecorderMime() {
-      const types = [
-        "audio/webm;codecs=opus",
-        "audio/webm",
-        "audio/mp4",
-        "audio/ogg;codecs=opus",
-      ];
+    function floatTo16(float32) {
+      const out = new Int16Array(float32.length);
+      for (let i = 0; i < float32.length; i++) {
+        const s = Math.max(-1, Math.min(1, float32[i]));
+        out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
+      return out;
+    }
+
+    function encodeMp3(audioBuf) {
+      const Encoder = window.lamejs && window.lamejs.Mp3Encoder;
+      if (!Encoder) throw new Error("MP3 encoder missing");
+      const channels = Math.min(2, audioBuf.numberOfChannels);
+      const enc = new Encoder(channels, audioBuf.sampleRate, 192);
+      const left = floatTo16(audioBuf.getChannelData(0));
+      const right = channels > 1 ? floatTo16(audioBuf.getChannelData(1)) : left;
+      const block = 1152;
+      const parts = [];
+      for (let i = 0; i < left.length; i += block) {
+        const l = left.subarray(i, i + block);
+        const r = right.subarray(i, i + block);
+        const buf = channels > 1 ? enc.encodeBuffer(l, r) : enc.encodeBuffer(l);
+        if (buf && buf.length) parts.push(buf);
+      }
+      const end = enc.flush();
+      if (end && end.length) parts.push(end);
+      return new Blob(parts, { type: "audio/mpeg" });
+    }
+
+    async function sniffContainer(blob) {
+      try {
+        const buf = new Uint8Array(await blob.slice(0, 16).arrayBuffer());
+        if (buf.length >= 8 && buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) return "mp4";
+        if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return "webm";
+      } catch (_) {}
+      return "";
+    }
+
+    function pickRecorderMime(kind) {
+      const types =
+        kind === "video"
+          ? [
+              "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+              "video/mp4;codecs=avc1,mp4a.40.2",
+              "video/mp4",
+              "video/webm;codecs=vp9,opus",
+              "video/webm;codecs=vp8,opus",
+              "video/webm",
+            ]
+          : [
+              "audio/webm;codecs=opus",
+              "audio/webm",
+              "audio/mp4",
+              "audio/ogg;codecs=opus",
+            ];
       for (const t of types) {
         if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
       }
       return "";
     }
 
+    function showCamPreview(stream) {
+      if (!camPreview || !camVideo || !stream) return;
+      camVideo.srcObject = stream;
+      camVideo.muted = true;
+      camVideo.setAttribute("playsinline", "");
+      camPreview.hidden = false;
+      camVideo.play().catch(() => {});
+    }
+
+    function hideCamPreview() {
+      if (camVideo) {
+        try {
+          camVideo.pause();
+        } catch (_) {}
+        camVideo.srcObject = null;
+      }
+      if (camPreview) camPreview.hidden = true;
+    }
+
+    function stopTracks(stream) {
+      if (!stream) return;
+      stream.getTracks().forEach((t) => {
+        try {
+          t.stop();
+        } catch (_) {}
+      });
+    }
+
+    async function getMedia(constraints) {
+      try {
+        return await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (err) {
+        if (constraints.audio && typeof constraints.audio === "object" && constraints.audio.deviceId) {
+          const retry = { ...constraints, audio: { ...constraints.audio } };
+          delete retry.audio.deviceId;
+          return await navigator.mediaDevices.getUserMedia(retry);
+        }
+        throw err;
+      }
+    }
+
+    async function openCapture(kind) {
+      const useClean = !!(selectedMicId || looksLikeInterfaceMic());
+      const audioOpts = useClean
+        ? {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          }
+        : {
+            echoCancellation: { ideal: true },
+            noiseSuppression: { ideal: true },
+            autoGainControl: { ideal: true },
+            channelCount: { ideal: 1 },
+          };
+      if (selectedMicId) audioOpts.deviceId = { exact: selectedMicId };
+      if (kind !== "video") {
+        return { mixStream: await getMedia({ audio: audioOpts }), previewStream: null, useClean };
+      }
+      const videoOpts = {
+        facingMode: { ideal: "user" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      };
+      try {
+        const both = await getMedia({ video: videoOpts, audio: audioOpts });
+        return { mixStream: both, previewStream: both, useClean };
+      } catch (_) {
+        const previewStream = await navigator.mediaDevices.getUserMedia({ video: videoOpts });
+        const mixStream = await getMedia({ audio: audioOpts });
+        return { mixStream, previewStream, useClean };
+      }
+    }
+
     function setRecordUi(on) {
-      if (!recordBtn) return;
-      recordBtn.classList.toggle("on", !!on);
-      recordBtn.setAttribute("aria-label", on ? "Stop recording" : "Record");
       if (recStrip) recStrip.hidden = !on;
-      if (!on) stopRecTimer();
+      if (!on) {
+        stopRecTimer();
+        hideCamPreview();
+      }
       syncRecordLabel();
     }
 
@@ -2331,40 +2533,25 @@
       if (recTimerEl) recTimerEl.textContent = "0:00";
     }
 
-    async function startRecording() {
+    async function startRecording(kind) {
+      kind = kind === "video" ? "video" : "audio";
       if (recording || recordBusy) return;
       if (!Object.keys(tracks).length) {
         setStatus("Stems are not ready yet.");
         return;
       }
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setStatus("Recording needs microphone permission in this browser.");
+        setStatus("Recording needs camera and microphone permission in this browser.");
         return;
       }
       recordBusy = true;
+      recordKind = kind;
       try {
         const ctx = ensureMetroCtx();
         wireAllStems();
-        const useClean = !!(selectedMicId || looksLikeInterfaceMic());
-        const audioOpts = useClean
-          ? {
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false,
-            }
-          : {
-              echoCancellation: { ideal: true },
-              noiseSuppression: { ideal: true },
-              autoGainControl: { ideal: true },
-              channelCount: { ideal: 1 },
-            };
-        if (selectedMicId) audioOpts.deviceId = { exact: selectedMicId };
-        try {
-          micStream = await navigator.mediaDevices.getUserMedia({ audio: audioOpts });
-        } catch (_) {
-          delete audioOpts.deviceId;
-          micStream = await navigator.mediaDevices.getUserMedia({ audio: audioOpts });
-        }
+        const cap = await openCapture(kind);
+        micStream = cap.mixStream;
+        camStream = cap.previewStream;
         await refreshMics();
         const track = micStream.getAudioTracks()[0];
         if (track && track.getSettings) {
@@ -2382,21 +2569,31 @@
         recBus.connect(recDest);
         micSource.connect(micGain);
         micGain.connect(recDest);
+        let recStream = recDest.stream;
+        if (kind === "video") {
+          const videoTrack = (camStream || micStream).getVideoTracks()[0];
+          if (!videoTrack) throw new Error("No camera");
+          recStream = new MediaStream([videoTrack, ...recDest.stream.getAudioTracks()]);
+          showCamPreview(camStream || micStream);
+        }
         recChunks = [];
-        const mime = pickRecorderMime();
-        let recOpts = { audioBitsPerSecond: 256000 };
+        const mime = pickRecorderMime(kind);
+        let recOpts =
+          kind === "video"
+            ? { audioBitsPerSecond: 192000, videoBitsPerSecond: 2500000 }
+            : { audioBitsPerSecond: 256000 };
         if (mime) recOpts.mimeType = mime;
         try {
-          mediaRecorder = new MediaRecorder(recDest.stream, recOpts);
+          mediaRecorder = new MediaRecorder(recStream, recOpts);
         } catch (_) {
           recOpts = mime ? { mimeType: mime } : {};
-          mediaRecorder = new MediaRecorder(recDest.stream, recOpts);
+          mediaRecorder = new MediaRecorder(recStream, recOpts);
         }
         mediaRecorder.ondataavailable = (e) => {
           if (e.data && e.data.size) recChunks.push(e.data);
         };
         mediaRecorder.onstop = () => {
-          finishRecording(mediaRecorder.mimeType || mime || "audio/webm");
+          finishRecording(mediaRecorder.mimeType || mime || (kind === "video" ? "video/webm" : "audio/webm"));
         };
         mediaRecorder.start(200);
         recording = true;
@@ -2404,8 +2601,8 @@
         startRecTimer();
         if (!playing) await playAll();
         setStatus(
-          "Recording" +
-            (useClean ? " (clean USB/mixer input)" : "") +
+          (kind === "video" ? "Recording video" : "Recording") +
+            (cap.useClean ? " (clean USB/mixer input)" : "") +
             " · mic " +
             Math.round(recMicGain * 100) +
             "%"
@@ -2413,7 +2610,11 @@
       } catch (e) {
         cleanupMic();
         setRecordUi(false);
-        setStatus("Record failed: " + (e.message || e) + " — allow the microphone.");
+        setStatus(
+          "Record failed: " +
+            (e.message || e) +
+            (kind === "video" ? " — allow the camera and microphone." : " — allow the microphone.")
+        );
       } finally {
         recordBusy = false;
       }
@@ -2427,21 +2628,21 @@
       try {
         if (mediaRecorder.state !== "inactive") mediaRecorder.stop();
       } catch (_) {
-        finishRecording("audio/webm");
+        finishRecording(recordKind === "video" ? "video/webm" : "audio/webm");
       }
     }
 
     function cleanupMic() {
       stopRecTimer();
+      hideCamPreview();
       try {
         if (micGain) micGain.disconnect();
       } catch (_) {}
       try {
         if (micSource) micSource.disconnect();
       } catch (_) {}
-      if (micStream) {
-        micStream.getTracks().forEach((t) => t.stop());
-      }
+      if (camStream && camStream !== micStream) stopTracks(camStream);
+      stopTracks(micStream);
       try {
         if (recDest && recBus) recBus.disconnect(recDest);
       } catch (_) {}
@@ -2451,6 +2652,7 @@
       micGain = null;
       micSource = null;
       micStream = null;
+      camStream = null;
       recDest = null;
       mediaRecorder = null;
     }
@@ -2458,17 +2660,42 @@
     async function finishRecording(mime) {
       const chunks = recChunks.slice();
       recChunks = [];
+      const kind = recordKind;
       cleanupMic();
       if (!chunks.length) {
         setStatus("Recording was empty.");
         return;
       }
-      showPendingTake(new Blob(chunks, { type: mime || "audio/webm" }), mime || "audio/webm");
+      const isVideo = kind === "video" || String(mime || "").startsWith("video/");
+      const raw = new Blob(chunks, { type: mime || (isVideo ? "video/webm" : "audio/webm") });
+      if (isVideo) {
+        const sniffed = await sniffContainer(raw);
+        const ext = sniffed === "mp4" || String(mime || "").includes("mp4") ? "mp4" : "webm";
+        const blob = ext === "mp4" ? new Blob([raw], { type: "video/mp4" }) : raw;
+        showPendingTake(blob, blob.type || "video/" + ext);
+        setStatus(
+          ext === "mp4"
+            ? "Preview the video, then Save or Discard."
+            : "Preview the video (WebM — this browser cannot record MP4). Then Save or Discard."
+        );
+        return;
+      }
+      setStatus("Making MP3…");
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        const decodeCtx = new AC();
+        const decoded = await decodeCtx.decodeAudioData(await raw.arrayBuffer());
+        decodeCtx.close().catch(() => {});
+        showPendingTake(encodeMp3(decoded), "audio/mpeg");
+      } catch (e) {
+        showPendingTake(raw, mime || "audio/webm");
+        setStatus("Could not make MP3 (" + (e.message || e) + "). Preview the original, then Save.");
+      }
     }
 
-    async function toggleRecord() {
+    async function toggleRecord(kind) {
       if (recording) stopRecording();
-      else await startRecording();
+      else await startRecording(kind);
     }
 
     async function pollSeparate(taskId) {

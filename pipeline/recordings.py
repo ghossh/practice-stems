@@ -1,4 +1,4 @@
-"""Save practice takes (mic mixed with stems in the browser) as MP3."""
+"""Save practice takes. Audio becomes MP3. Video is stored as MP4 or WebM."""
 
 from __future__ import annotations
 
@@ -11,7 +11,8 @@ from .jobs import PLAY
 
 TAKE_BITRATE = "192k"
 
-_SAFE_TAKE = re.compile(r"^take_\d{8}_\d{6}\.mp3$")
+_SAFE_TAKE = re.compile(r"^take_\d{8}_\d{6}\.(mp3|mp4|webm)$")
+_VIDEO_TYPE = {".mp4": "video/mp4", ".webm": "video/webm"}
 
 
 def recordings_dir(job_id: str) -> Path:
@@ -20,20 +21,34 @@ def recordings_dir(job_id: str) -> Path:
     return path
 
 
-def _take_name() -> str:
+def _take_name(ext: str = ".mp3") -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    return f"take_{stamp}.mp3"
+    return f"take_{stamp}{ext}"
+
+
+def media_type_for(path: Path) -> str:
+    return _VIDEO_TYPE.get(path.suffix.lower(), "audio/mpeg")
+
+
+def _is_video_upload(orig_name: str) -> bool:
+    return Path(orig_name or "").stem.lower() == "video"
 
 
 def save_recording(job_id: str, data: bytes, orig_name: str = "") -> dict:
     if not data:
         raise ValueError("empty recording")
     rec_dir = recordings_dir(job_id)
-    name = _take_name()
-    dest = rec_dir / name
     suffix = Path(orig_name or "take.webm").suffix.lower()
+    if _is_video_upload(orig_name):
+        if suffix not in {".mp4", ".webm"}:
+            suffix = ".webm"
+        dest = rec_dir / _take_name(suffix)
+        dest.write_bytes(data)
+        return recording_info(job_id, dest)
+
     if suffix not in {".webm", ".ogg", ".mp4", ".m4a", ".wav", ".mp3", ".aac"}:
         suffix = ".webm"
+    dest = rec_dir / _take_name(".mp3")
     raw = rec_dir / f".tmp_{dest.stem}{suffix}"
     try:
         raw.write_bytes(data)

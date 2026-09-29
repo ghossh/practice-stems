@@ -47,7 +47,13 @@ from pipeline.jobs import (
     touch_played,
 )
 from pipeline.mix import export_mix, export_stems_zip
-from pipeline.recordings import delete_recording, list_recordings, recording_path, save_recording
+from pipeline.recordings import (
+    delete_recording,
+    list_recordings,
+    media_type_for,
+    recording_path,
+    save_recording,
+)
 from pipeline.separate import STEM_ORDER, separate_stems
 from pipeline.stretch import (
     MAX_SEMITONES,
@@ -599,7 +605,7 @@ def create_app() -> FastAPI:
             raise HTTPException(404, str(exc)) from exc
         return FileResponse(
             path,
-            media_type="audio/mpeg",
+            media_type=media_type_for(path),
             filename=path.name,
             headers={"Content-Disposition": f'inline; filename="{path.name}"'},
         )
