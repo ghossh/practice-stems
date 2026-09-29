@@ -15,7 +15,7 @@
       </div>
       <div class="loopz-hero-row">
         <h1>Loopz</h1>
-        <p class="loopz-sub">Drum loops + piano/bass chords. Change tempo, volume, and key while you solo.</p>
+        <p class="loopz-sub">Drum loops, piano, bass, and clean guitar. Record yourself with the band.</p>
       </div>
     </div>
 
@@ -28,7 +28,7 @@
       <div class="tempo-hero">
         <div class="bpm-readout">
           <span class="bpm-num" id="bpmNum">110</span>
-          <span class="bpm-lab">BPM</span>
+          <span class="bpm-lab" id="bpmLab">BPM</span>
         </div>
         <div class="tempo-slider-wrap">
           <input type="range" id="tempo" min="40" max="220" step="1" value="110" />
@@ -61,6 +61,11 @@
           <input type="range" id="bassVol" min="0" max="1" step="0.01" value="0.8" />
           <span class="vol" id="bassVolVal">80%</span>
         </label>
+        <label class="loopz-vol">
+          <span>Guitar</span>
+          <input type="range" id="guitarVol" min="0" max="1" step="0.01" value="0.55" />
+          <span class="vol" id="guitarVolVal">55%</span>
+        </label>
       </div>
 
       <div class="beat-strip" id="beatStrip" aria-hidden="true"></div>
@@ -69,11 +74,24 @@
         <button class="primary play-btn" type="button" id="playBtn" aria-label="Play" title="Play"></button>
         <button type="button" id="tapBtn" title="Tap a few times to set tempo">Tap tempo</button>
         <button type="button" id="metroBtn" class="hq-toggle">Metronome: Off</button>
+        <button type="button" id="recordBtn" class="record-btn" aria-label="Record audio">● Record audio</button>
+        <button type="button" id="recordVideoBtn" class="record-btn" aria-label="Record video">● Record video</button>
+        <select id="micSel" title="Microphone" aria-label="Microphone">
+          <option value="">Default microphone</option>
+        </select>
+        <span class="rec-timer" id="recTimer" hidden>0:00</span>
       </div>
+      <div class="cam-preview" id="camPreview" hidden>
+        <video id="camVideo" autoplay playsinline muted></video>
+        <span class="cam-preview-badge">REC</span>
+      </div>
+      <p class="loopz-rec-note" id="recNote" hidden></p>
+      <audio id="takeAudio" controls hidden></audio>
+      <video id="takeVideo" class="take-video" controls playsinline hidden></video>
       <div class="loopz-checks">
         <label><input type="checkbox" id="countIn" /> Count-in (1 bar)</label>
         <label><input type="checkbox" id="keepTempo" /> Keep tempo when switching loops</label>
-        <label>
+        <div class="loopz-field">
           <span>Meter</span>
           <select id="meterSel">
             <option value="4" selected>4/4</option>
@@ -81,7 +99,25 @@
             <option value="2">2/4</option>
             <option value="6">6/8</option>
           </select>
-        </label>
+        </div>
+        <div class="loopz-field">
+          <span>Beats</span>
+          <div class="seg" id="shapeSeg" role="group" aria-label="Beats">
+            <button type="button" data-shape="steady" class="on">Steady</button>
+            <button type="button" data-shape="build">Build up</button>
+            <button type="button" data-shape="thin">Thin out</button>
+          </div>
+        </div>
+        <div class="loopz-field">
+          <span>Every</span>
+          <select id="shapeEverySel" title="How long each build or thin step lasts">
+            <option value="2">2 beats</option>
+            <option value="4" selected>4 beats</option>
+            <option value="8">8 beats</option>
+            <option value="16">16 beats</option>
+          </select>
+        </div>
+        <span class="loopz-shape-hint" id="shapeHint"></span>
       </div>
     </div>
 
@@ -90,10 +126,10 @@
         <h2>Jam chords</h2>
         <label class="jam-toggle">
           <input type="checkbox" id="jamOn" checked />
-          Piano + bass
+          Piano + bass + guitar
         </label>
       </div>
-      <p class="section-sub" style="margin-top:0">Solo over piano and bass — not another guitar. Transpose to any key.</p>
+      <p class="section-sub" style="margin-top:0">Piano and clean guitar follow the same chords. Turn Guitar to 0% to mute it.</p>
 
       <div class="jam-now-row">
         <div class="jam-now-wrap">
@@ -140,6 +176,7 @@
     </div>
     <p class="footer-note">Acoustic kit from Virtuosity Drums (CC0). Not affiliated with the Loopz Android app.</p>
   </div>
+  <script src="static/lame.min.js"></script>
   <script src="static/loopz.js"></script>
 </body>
 </html>

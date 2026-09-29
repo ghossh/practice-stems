@@ -71,7 +71,8 @@
         </div>
         <div class="transport-record">
           <div class="record-wrap">
-            <button type="button" class="record-btn" id="recordBtn" aria-label="Record">● Record</button>
+            <button type="button" class="record-btn" id="recordBtn" aria-label="Record audio">● Record audio</button>
+            <button type="button" class="record-btn" id="recordVideoBtn" aria-label="Record video">● Record video</button>
             <select id="micSel" title="Microphone" aria-label="Microphone">
               <option value="">Default microphone</option>
             </select>
@@ -85,6 +86,10 @@
               <input type="range" id="masterVol" min="0" max="1.5" step="0.05" value="1" />
               <span class="rec-gain-val" id="masterVolVal">100%</span>
             </label>
+          </div>
+          <div class="cam-preview" id="camPreview" hidden>
+            <video id="camVideo" autoplay playsinline muted></video>
+            <span class="cam-preview-badge">REC</span>
           </div>
         </div>
       </div>
@@ -165,10 +170,32 @@
         </div>
       </div>
 
-      <div class="seek-row">
-        <span class="time" id="tCur">0:00</span>
-        <input type="range" id="seek" min="0" max="1000" value="0" step="1" />
-        <span class="time" id="tDur">0:00</span>
+      <div class="seek-block">
+        <div class="seek-row">
+          <span class="time" id="tCur">0:00</span>
+          <input type="range" id="seek" min="0" max="1000" value="0" step="1" />
+          <span class="time" id="tDur">0:00</span>
+        </div>
+        <div class="activity-row" id="activityRow" hidden>
+          <span class="activity-spacer"></span>
+          <div class="activity-stack">
+            <div class="activity-plot" id="activityPlotWrap" title="Click to jump · drag to loop">
+              <svg id="activityPlot" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+            </div>
+            <div class="activity-legend" id="activityLegend">
+              <label><input type="checkbox" data-series="vocals" checked /><i class="activity-swatch vocals"></i> vocals</label>
+              <label><input type="checkbox" data-series="drums" checked /><i class="activity-swatch drums"></i> drums</label>
+              <label><input type="checkbox" data-series="bass" checked /><i class="activity-swatch bass"></i> bass</label>
+              <label><input type="checkbox" data-series="solo" checked /><i class="activity-swatch solo"></i> solo</label>
+              <label><input type="checkbox" data-series="guitar" checked /><i class="activity-swatch guitar"></i> guitar</label>
+              <label><input type="checkbox" data-series="other" /><i class="activity-swatch other"></i> other</label>
+              <button type="button" class="ghost activity-loop-btn" id="loopClearBtn" hidden>Clear loop</button>
+              <button type="button" class="ghost activity-loop-btn" id="loopDownloadBtn" hidden title="Download selected loop as MP3">Download loop</button>
+              <span class="activity-loop-meta" id="loopMeta"></span>
+            </div>
+          </div>
+          <span class="activity-spacer"></span>
+        </div>
       </div>
 
       <div class="presets" id="presets"></div>
@@ -187,7 +214,7 @@
       <div class="rec-strip" id="recStrip" hidden>
         <span class="rec-dot" aria-hidden="true"></span>
         <span class="rec-timer" id="recTimer">0:00</span>
-        <span class="rec-strip-lab">Recording</span>
+        <span class="rec-strip-lab" id="recStripLab">Recording</span>
         <span class="rec-mic-lab" id="recMicLab"></span>
         <button type="button" class="ghost" id="recStripStop">Stop</button>
       </div>
@@ -197,6 +224,7 @@
           <span class="takes-hint">Listen first, then save or discard</span>
         </div>
         <audio id="previewTake" controls preload="auto"></audio>
+        <video id="previewVideo" class="take-video" controls playsinline hidden></video>
         <div class="take-preview-actions">
           <button type="button" class="primary" id="saveTakeBtn">Save take</button>
           <button type="button" id="discardTakeBtn">Discard</button>
@@ -219,6 +247,7 @@
     </section>
   </div>
 
+  <script src="static/lame.min.js"></script>
   <script>
     const BOOT = {"job_id": "fearless", "title": "Lost Sky - Fearless pt.II (feat. Chris Linton) | Trap | NCS - Copyright Free Music", "hub_url": "./player.html", "player_url": "./player.html", "source_url": "demo/fearless/source.mp3", "stem_count": 6, "has_stems": true, "bpm": null, "bpm_meta": null, "time_signature": null, "beats_per_bar": 4, "chords_status": "done", "chords": [{"start": 0.0, "end": 2.0, "label": "D#", "raw": "D#:maj"}, {"start": 2.0, "end": 4.6, "label": "B", "raw": "B:maj"}, {"start": 4.6, "end": 7.0, "label": "F#", "raw": "F#:maj"}, {"start": 7.0, "end": 7.8, "label": "C#", "raw": "C#:maj"}, {"start": 7.8, "end": 8.9, "label": "A#m", "raw": "A#:min"}, {"start": 8.9, "end": 10.6, "label": "D#", "raw": "D#:maj"}, {"start": 10.6, "end": 13.3, "label": "B", "raw": "B:maj"}, {"start": 13.3, "end": 15.6, "label": "F#", "raw": "F#:maj"}, {"start": 15.6, "end": 16.6, "label": "C#", "raw": "C#:maj"}, {"start": 16.6, "end": 17.6, "label": "A#m", "raw": "A#:min"}, {"start": 17.6, "end": 19.6, "label": "D#", "raw": "D#:maj"}, {"start": 19.6, "end": 22.2, "label": "B", "raw": "B:maj"}, {"start": 22.2, "end": 24.4, "label": "F#", "raw": "F#:maj"}, {"start": 24.4, "end": 26.2, "label": "C#", "raw": "C#:maj"}, {"start": 26.2, "end": 28.2, "label": "D#", "raw": "D#:maj"}, {"start": 28.2, "end": 30.9, "label": "B", "raw": "B:maj"}, {"start": 30.9, "end": 33.0, "label": "F#", "raw": "F#:maj"}, {"start": 33.0, "end": 35.2, "label": "C#", "raw": "C#:maj"}, {"start": 35.2, "end": 37.3, "label": "D#", "raw": "D#:maj"}, {"start": 37.3, "end": 39.5, "label": "B", "raw": "B:maj"}, {"start": 39.5, "end": 41.9, "label": "F#", "raw": "F#:maj"}, {"start": 41.9, "end": 43.5, "label": "C#", "raw": "C#:maj"}, {"start": 43.5, "end": 45.9, "label": "D#", "raw": "D#:maj"}, {"start": 45.9, "end": 48.4, "label": "B", "raw": "B:maj"}, {"start": 48.4, "end": 52.6, "label": "N", "raw": "N"}, {"start": 52.6, "end": 55.0, "label": "D#", "raw": "D#:maj"}, {"start": 55.0, "end": 56.4, "label": "B", "raw": "B:maj"}, {"start": 56.4, "end": 59.2, "label": "F#", "raw": "F#:maj"}, {"start": 59.2, "end": 61.0, "label": "C#", "raw": "C#:maj"}, {"start": 61.0, "end": 63.7, "label": "D#", "raw": "D#:maj"}, {"start": 63.7, "end": 65.2, "label": "B", "raw": "B:maj"}, {"start": 65.2, "end": 67.1, "label": "F#", "raw": "F#:maj"}, {"start": 67.1, "end": 67.8, "label": "F#m", "raw": "F#:min"}, {"start": 67.8, "end": 69.7, "label": "C#", "raw": "C#:maj"}, {"start": 69.7, "end": 71.7, "label": "D#", "raw": "D#:maj"}, {"start": 71.7, "end": 74.5, "label": "B", "raw": "B:maj"}, {"start": 74.5, "end": 76.6, "label": "F#", "raw": "F#:maj"}, {"start": 76.6, "end": 77.6, "label": "C#", "raw": "C#:maj"}, {"start": 77.6, "end": 79.2, "label": "D#m", "raw": "D#:min"}, {"start": 79.2, "end": 80.4, "label": "D#", "raw": "D#:maj"}, {"start": 80.4, "end": 83.1, "label": "B", "raw": "B:maj"}, {"start": 83.1, "end": 85.3, "label": "F#", "raw": "F#:maj"}, {"start": 85.3, "end": 86.4, "label": "C#", "raw": "C#:maj"}, {"start": 86.4, "end": 88.2, "label": "D#m", "raw": "D#:min"}, {"start": 88.2, "end": 89.6, "label": "D#", "raw": "D#:maj"}, {"start": 89.6, "end": 92.0, "label": "B", "raw": "B:maj"}, {"start": 92.0, "end": 94.6, "label": "F#", "raw": "F#:maj"}, {"start": 94.6, "end": 95.2, "label": "C#", "raw": "C#:maj"}, {"start": 95.2, "end": 96.3, "label": "A#m", "raw": "A#:min"}, {"start": 96.3, "end": 98.4, "label": "D#", "raw": "D#:maj"}, {"start": 98.4, "end": 100.8, "label": "B", "raw": "B:maj"}, {"start": 100.8, "end": 103.9, "label": "F#", "raw": "F#:maj"}, {"start": 103.9, "end": 104.9, "label": "A#m", "raw": "A#:min"}, {"start": 104.9, "end": 107.0, "label": "D#", "raw": "D#:maj"}, {"start": 107.0, "end": 109.6, "label": "B", "raw": "B:maj"}, {"start": 109.6, "end": 111.7, "label": "F#", "raw": "F#:maj"}, {"start": 111.7, "end": 112.9, "label": "C#", "raw": "C#:maj"}, {"start": 112.9, "end": 113.8, "label": "A#m", "raw": "A#:min"}, {"start": 113.8, "end": 115.8, "label": "D#", "raw": "D#:maj"}, {"start": 115.8, "end": 118.3, "label": "B", "raw": "B:maj"}, {"start": 118.3, "end": 120.7, "label": "F#", "raw": "F#:maj"}, {"start": 120.7, "end": 121.6, "label": "C#", "raw": "C#:maj"}, {"start": 121.6, "end": 122.5, "label": "A#m", "raw": "A#:min"}, {"start": 122.5, "end": 124.7, "label": "D#", "raw": "D#:maj"}, {"start": 124.7, "end": 126.8, "label": "B", "raw": "B:maj"}, {"start": 126.8, "end": 129.2, "label": "F#", "raw": "F#:maj"}, {"start": 129.2, "end": 131.2, "label": "C#", "raw": "C#:maj"}, {"start": 131.2, "end": 133.3, "label": "D#", "raw": "D#:maj"}, {"start": 133.3, "end": 135.8, "label": "B", "raw": "B:maj"}, {"start": 135.8, "end": 137.6, "label": "F#", "raw": "F#:maj"}, {"start": 137.6, "end": 139.8, "label": "N", "raw": "N"}, {"start": 139.8, "end": 142.4, "label": "D#", "raw": "D#:maj"}, {"start": 142.4, "end": 143.8, "label": "F#m", "raw": "F#:min"}, {"start": 143.8, "end": 146.3, "label": "F#", "raw": "F#:maj"}, {"start": 146.3, "end": 147.6, "label": "C#", "raw": "C#:maj"}, {"start": 147.6, "end": 148.6, "label": "F#", "raw": "F#:maj"}, {"start": 148.6, "end": 151.0, "label": "D#", "raw": "D#:maj"}, {"start": 151.0, "end": 152.6, "label": "B", "raw": "B:maj"}, {"start": 152.6, "end": 154.9, "label": "F#", "raw": "F#:maj"}, {"start": 154.9, "end": 157.3, "label": "C#", "raw": "C#:maj"}, {"start": 157.3, "end": 159.0, "label": "D#", "raw": "D#:maj"}, {"start": 159.0, "end": 161.8, "label": "B", "raw": "B:maj"}, {"start": 161.8, "end": 163.8, "label": "F#", "raw": "F#:maj"}, {"start": 163.8, "end": 165.0, "label": "C#", "raw": "C#:maj"}, {"start": 165.0, "end": 166.0, "label": "D#m", "raw": "D#:min"}, {"start": 166.0, "end": 167.7, "label": "D#", "raw": "D#:maj"}, {"start": 167.7, "end": 170.3, "label": "B", "raw": "B:maj"}, {"start": 170.3, "end": 172.6, "label": "F#", "raw": "F#:maj"}, {"start": 172.6, "end": 174.0, "label": "C#", "raw": "C#:maj"}, {"start": 174.0, "end": 176.7, "label": "D#", "raw": "D#:maj"}, {"start": 176.7, "end": 179.2, "label": "B", "raw": "B:maj"}, {"start": 179.2, "end": 181.4, "label": "F#", "raw": "F#:maj"}, {"start": 181.4, "end": 182.4, "label": "C#", "raw": "C#:maj"}, {"start": 182.4, "end": 183.4, "label": "A#m", "raw": "A#:min"}, {"start": 183.4, "end": 185.5, "label": "D#", "raw": "D#:maj"}, {"start": 185.5, "end": 187.9, "label": "B", "raw": "B:maj"}, {"start": 187.9, "end": 190.1, "label": "F#", "raw": "F#:maj"}, {"start": 190.1, "end": 191.1, "label": "C#", "raw": "C#:maj"}, {"start": 191.1, "end": 194.1, "label": "A#m", "raw": "A#:min"}], "chords_source": "harmonic_stems", "chords_engine": "madmom_deepchroma", "chord_count": 99, "key": "B", "key_meta": {"key": "B", "root": "B", "mode": "major", "score": 0.8325, "engine": "chords", "source": "chords"}, "stems": {"vocals": "demo/fearless/vocals.mp3", "drums": "demo/fearless/drums.mp3", "bass": "demo/fearless/bass.mp3", "guitar": "demo/fearless/guitar.mp3", "piano": "demo/fearless/piano.mp3", "other": "demo/fearless/other.mp3"}, "stem_order": ["vocals", "drums", "bass", "guitar", "piano", "other"], "recordings": [], "static_demo": true};
 
@@ -255,6 +284,9 @@
 
     const playBtn = document.getElementById("playBtn");
     const recordBtn = document.getElementById("recordBtn");
+    const recordVideoBtn = document.getElementById("recordVideoBtn");
+    const camPreview = document.getElementById("camPreview");
+    const camVideo = document.getElementById("camVideo");
     const resetBtn = document.getElementById("resetBtn");
     const downloadBtn = document.getElementById("downloadBtn");
     const downloadStemsBtn = document.getElementById("downloadStemsBtn");
@@ -280,6 +312,13 @@
     const seekEl = document.getElementById("seek");
     const tCur = document.getElementById("tCur");
     const tDur = document.getElementById("tDur");
+    const activityRow = document.getElementById("activityRow");
+    const activityPlot = document.getElementById("activityPlot");
+    const activityPlotWrap = document.getElementById("activityPlotWrap");
+    const activityLegend = document.getElementById("activityLegend");
+    const loopClearBtn = document.getElementById("loopClearBtn");
+    const loopDownloadBtn = document.getElementById("loopDownloadBtn");
+    const loopMeta = document.getElementById("loopMeta");
     const statusEl = document.getElementById("status");
     const detectChordsBtn = document.getElementById("detectChordsBtn");
     const playChordsBtn = document.getElementById("playChordsBtn");
@@ -309,6 +348,7 @@
     const takesList = document.getElementById("takesList");
     const takesCount = document.getElementById("takesCount");
     const recStrip = document.getElementById("recStrip");
+    const recStripLab = document.getElementById("recStripLab");
     const recTimerEl = document.getElementById("recTimer");
     const recStripStop = document.getElementById("recStripStop");
     const recMicLab = document.getElementById("recMicLab");
@@ -318,6 +358,7 @@
     const masterVolEl = document.getElementById("masterVol");
     const masterVolVal = document.getElementById("masterVolVal");
     const takePreview = document.getElementById("takePreview");
+    const previewVideo = document.getElementById("previewVideo");
     const previewTake = document.getElementById("previewTake");
     const saveTakeBtn = document.getElementById("saveTakeBtn");
     const discardTakeBtn = document.getElementById("discardTakeBtn");
@@ -358,6 +399,8 @@
     let micGain = null;
     let micSource = null;
     let micStream = null;
+    let camStream = null;
+    let recordKind = "audio";
     let recDest = null;
     let mediaRecorder = null;
     let recChunks = [];
@@ -1095,6 +1138,36 @@
       }
     }
 
+    async function downloadLoop() {
+      if (!BOOT.job_id) return;
+      const range = loopRange();
+      if (!range) {
+        setStatus("Drag the activity plot to select a loop first.");
+        return;
+      }
+      if (loopDownloadBtn) loopDownloadBtn.disabled = true;
+      const dur = duration() || (activityData && activityData.duration_sec) || 0;
+      setStatus("Rendering loop MP3…");
+      try {
+        const res = await fetch("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/export", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...mixPayload(),
+            start_ratio: range[0],
+            end_ratio: range[1],
+          }),
+        });
+        const fname = await saveDownload(res, "loop.mp3");
+        const span = dur > 0 ? " " + fmt(range[0] * dur) + "–" + fmt(range[1] * dur) : "";
+        setStatus("Downloaded " + fname + " (loop" + span + ", current mute/vols).");
+      } catch (e) {
+        setStatus("Download loop failed: " + e.message);
+      } finally {
+        if (loopDownloadBtn) loopDownloadBtn.disabled = false;
+      }
+    }
+
     function anySolo() {
       return Object.values(tracks).some((t) => t.solo);
     }
@@ -1237,9 +1310,41 @@
       }
     }
 
+    function stemLevel(t, on) {
+      const level = on ? Math.min(1, Math.max(0, t.vol)) : 0;
+      if (t.gainNode) {
+        t.gainNode.gain.value = level;
+        t.audio.volume = 1;
+      } else {
+        t.audio.volume = level;
+      }
+      t.audio.muted = false;
+    }
+
     function onMixChange() {
-      if (playing) resyncActivePlayback();
-      else applyAudibility();
+      if (!playing) {
+        applyAudibility();
+        return;
+      }
+      const names = activeStemNames();
+      if (!names.length) {
+        pauseAll();
+        setStatus("All stems muted.");
+        return;
+      }
+      const master = masterAudio();
+      const t0 = master ? master.currentTime : 0;
+      for (const [name, t] of Object.entries(tracks)) {
+        const on = names.includes(name);
+        stemLevel(t, on);
+        if (!on || !t.audio.paused) continue;
+        t.audio.preload = "auto";
+        if (Number.isFinite(t0) && Math.abs(t.audio.currentTime - t0) > 0.05) {
+          t.audio.currentTime = t0;
+        }
+        t.audio.play().catch(() => {});
+      }
+      refreshButtons();
     }
 
     function masterAudio() {
@@ -1276,17 +1381,20 @@
       }, 500);
       uiTimer = setInterval(updateSeekUI, 200);
       if (metroOn) startMetro();
+      startLoopWatch();
     }
 
     function updateSeekUI() {
-      if (seeking) return;
       const a = masterAudio();
       if (!a) return;
       const dur = duration();
       tDur.textContent = fmt(dur);
-      tCur.textContent = fmt(a.currentTime || 0);
-      if (dur > 0) seekEl.value = String((a.currentTime / dur) * 1000);
-      syncChordsFromAudio();
+      if (!seeking) {
+        tCur.textContent = fmt(a.currentTime || 0);
+        if (dur > 0) seekEl.value = String((a.currentTime / dur) * 1000);
+        syncChordsFromAudio();
+      }
+      updateActivityPlayhead();
     }
 
     async function playAll() {
@@ -1344,6 +1452,7 @@
       playing = false;
       setPlayUi(false);
       clearTimers();
+      stopLoopWatch();
       setStatus("Paused");
     }
 
@@ -1366,7 +1475,236 @@
       for (const tr of Object.values(tracks)) tr.audio.currentTime = t;
       metroLastBeat = -1;
       lastPlayedChordIdx = -1;
-      updateSeekUI();
+      seekEl.value = String((t / dur) * 1000);
+      tCur.textContent = fmt(t);
+      updateActivityPlayhead();
+      if (!seeking) syncChordsFromAudio();
+    }
+
+    const ACTIVITY_KEYS = ["vocals", "drums", "bass", "solo", "guitar", "other"];
+    let activityData = null;
+    let activityOn = {
+      vocals: true,
+      drums: true,
+      bass: true,
+      solo: true,
+      guitar: true,
+      other: false,
+    };
+    let loopA = null;
+    let loopB = null;
+    let plotDrag = null;
+    let loopRaf = 0;
+    try {
+      const saved = JSON.parse(localStorage.getItem("practiceActivityOn") || "null");
+      if (saved && typeof saved === "object") {
+        for (const k of ACTIVITY_KEYS) {
+          if (typeof saved[k] === "boolean") activityOn[k] = saved[k];
+        }
+        if (saved.guitar == null && typeof saved.solo === "boolean") activityOn.guitar = saved.solo;
+      }
+    } catch (_) {}
+
+    function saveActivityOn() {
+      try { localStorage.setItem("practiceActivityOn", JSON.stringify(activityOn)); } catch (_) {}
+    }
+
+    function syncActivityToggles() {
+      if (!activityLegend) return;
+      activityLegend.querySelectorAll("input[data-series]").forEach((el) => {
+        el.checked = !!activityOn[el.dataset.series];
+      });
+    }
+
+    function loopActive() {
+      return loopA != null && loopB != null && Math.abs(loopB - loopA) > 0.008;
+    }
+
+    function loopRange() {
+      if (!loopActive()) return null;
+      return [Math.min(loopA, loopB), Math.max(loopA, loopB)];
+    }
+
+    function syncLoopUi() {
+      const range = loopRange();
+      if (loopClearBtn) loopClearBtn.hidden = !range;
+      if (loopDownloadBtn) loopDownloadBtn.hidden = !range;
+      if (loopMeta) {
+        if (!range) loopMeta.textContent = "";
+        else {
+          const dur = duration() || (activityData && activityData.duration_sec) || 0;
+          loopMeta.textContent = range
+            ? "Loop " + fmt(range[0] * dur) + "–" + fmt(range[1] * dur)
+            : "";
+        }
+      }
+    }
+
+    function clearLoop() {
+      loopA = loopB = null;
+      plotDrag = null;
+      syncLoopUi();
+      renderActivityPlot();
+      setStatus("Loop cleared");
+    }
+
+    function setLoop(a, b) {
+      const lo = Math.max(0, Math.min(1, Math.min(a, b)));
+      const hi = Math.max(0, Math.min(1, Math.max(a, b)));
+      if (hi - lo < 0.008) return false;
+      loopA = lo;
+      loopB = hi;
+      syncLoopUi();
+      renderActivityPlot();
+      const dur = duration();
+      if (dur > 0) {
+        seekToRatio(lo);
+        setStatus("Loop " + fmt(lo * dur) + "–" + fmt(hi * dur) + " — drag again to change");
+      }
+      if (playing) startLoopWatch();
+      return true;
+    }
+
+    function checkLoopWrap() {
+      const range = loopRange();
+      if (!range || !playing) return;
+      const a = masterAudio();
+      const dur = duration();
+      if (!a || !(dur > 0)) return;
+      const lo = range[0] * dur;
+      const hi = range[1] * dur;
+      if (hi - lo < 0.12) return;
+      const t = a.currentTime || 0;
+      const pad = 0.045 * Math.max(0.5, playbackRate);
+      if (t >= hi - pad || t < lo - 0.04) seekToRatio(range[0]);
+    }
+
+    function startLoopWatch() {
+      if (loopRaf) cancelAnimationFrame(loopRaf);
+      const tick = () => {
+        loopRaf = 0;
+        checkLoopWrap();
+        if (playing && loopActive()) loopRaf = requestAnimationFrame(tick);
+      };
+      if (playing && loopActive()) loopRaf = requestAnimationFrame(tick);
+    }
+
+    function stopLoopWatch() {
+      if (loopRaf) cancelAnimationFrame(loopRaf);
+      loopRaf = 0;
+    }
+
+    function seriesToPolyline(arr, width, height, pad) {
+      const n = (arr || []).length;
+      if (!n) return "";
+      const usable = height - pad * 2;
+      return arr.map((v, i) => {
+        const x = (i / Math.max(n - 1, 1)) * width;
+        const y = height - pad - Math.max(0, Math.min(1, Number(v) || 0)) * usable;
+        return x.toFixed(1) + "," + y.toFixed(1);
+      }).join(" ");
+    }
+
+    function renderActivityPlot(data) {
+      if (data) activityData = data;
+      const src = activityData;
+      if (!activityPlot || !src || !src.vocals || !src.vocals.length) {
+        if (activityRow) activityRow.hidden = true;
+        return;
+      }
+      syncActivityToggles();
+      const W = 1000, H = 100, pad = 8;
+      const parts = [];
+      const order = ["drums", "bass", "other", "guitar", "vocals", "solo"];
+      for (const key of order) {
+        const series = src[key];
+        if (!activityOn[key] || !series || !series.length) continue;
+        parts.push(
+          '<polyline class="' + key + '" points="' + seriesToPolyline(series, W, H, pad) + '"></polyline>'
+        );
+      }
+      const range = loopRange();
+      const dragRange =
+        plotDrag && plotDrag.moved
+          ? [Math.min(plotDrag.start, plotDrag.last), Math.max(plotDrag.start, plotDrag.last)]
+          : null;
+      const vis = dragRange || range;
+      if (vis && vis[1] - vis[0] > 0.004) {
+        const x = vis[0] * W;
+        const w = (vis[1] - vis[0]) * W;
+        parts.push(
+          '<rect class="activity-loop" x="' +
+            x.toFixed(1) +
+            '" y="0" width="' +
+            w.toFixed(1) +
+            '" height="' +
+            H +
+            '"></rect>'
+        );
+      }
+      parts.push('<line class="activity-playhead" id="activityPlayhead" x1="0" y1="0" x2="0" y2="' + H + '"></line>');
+      activityPlot.innerHTML = parts.join("");
+      if (activityRow) activityRow.hidden = false;
+      syncLoopUi();
+      updateActivityPlayhead();
+    }
+
+    function updateActivityPlayhead() {
+      const line = document.getElementById("activityPlayhead");
+      if (!line) return;
+      const dur = duration();
+      let ratio = 0;
+      if (dur > 0) {
+        if (seeking) ratio = parseInt(seekEl.value, 10) / 1000;
+        else {
+          const a = masterAudio();
+          if (a) ratio = (a.currentTime || 0) / dur;
+        }
+      }
+      const x = Math.max(0, Math.min(1000, ratio * 1000));
+      line.setAttribute("x1", x.toFixed(1));
+      line.setAttribute("x2", x.toFixed(1));
+    }
+
+    function activityRatioFromEvent(ev) {
+      if (!activityPlotWrap) return 0;
+      const r = activityPlotWrap.getBoundingClientRect();
+      if (!(r.width > 0)) return 0;
+      return Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+    }
+
+    function activityIsComplete(data) {
+      return !!(
+        data &&
+        data.vocals &&
+        data.vocals.length &&
+        data.drums &&
+        data.drums.length &&
+        data.bass &&
+        data.bass.length &&
+        data.guitar &&
+        data.guitar.length
+      );
+    }
+
+    async function ensureActivityProfile() {
+      if (activityIsComplete(BOOT.activity)) {
+        renderActivityPlot(BOOT.activity);
+        return;
+      }
+      if (!BOOT.job_id || BOOT.static_demo) {
+        if (BOOT.activity) renderActivityPlot(BOOT.activity);
+        return;
+      }
+      try {
+        const r = await fetchJSON("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/activity", {
+          method: "POST",
+        });
+        BOOT.activity = r;
+        renderActivityPlot(r);
+      } catch (_) {
+        if (BOOT.activity) renderActivityPlot(BOOT.activity);
+      }
     }
 
     function refreshButtons() {
@@ -1859,11 +2197,25 @@
     }
 
     function syncRecordLabel() {
-      if (!recordBtn) return;
       const mic = currentMicLabel();
-      recordBtn.textContent = recording ? "● Stop" : "● Record";
-      recordBtn.title = (recording ? "Stop recording" : "Record") + " · " + mic;
+      if (recordBtn) {
+        const on = recording && recordKind === "audio";
+        recordBtn.textContent = on ? "● Stop" : "● Record audio";
+        recordBtn.classList.toggle("on", on);
+        recordBtn.disabled = recording && recordKind !== "audio";
+        recordBtn.setAttribute("aria-label", on ? "Stop recording" : "Record audio");
+        recordBtn.title = (on ? "Stop recording" : "Record audio") + " · " + mic;
+      }
+      if (recordVideoBtn) {
+        const on = recording && recordKind === "video";
+        recordVideoBtn.textContent = on ? "● Stop" : "● Record video";
+        recordVideoBtn.classList.toggle("on", on);
+        recordVideoBtn.disabled = recording && recordKind !== "video";
+        recordVideoBtn.setAttribute("aria-label", on ? "Stop recording" : "Record video");
+        recordVideoBtn.title = on ? "Stop recording" : "Record video with live camera preview";
+      }
       if (recMicLab) recMicLab.textContent = mic;
+      if (recStripLab) recStripLab.textContent = recordKind === "video" ? "Recording video" : "Recording";
     }
 
     async function refreshMics() {
@@ -1914,11 +2266,16 @@
         tdWhen.textContent = fmtWhen(rec.created);
         const tdPlay = document.createElement("td");
         tdPlay.className = "take-play";
-        const audio = document.createElement("audio");
-        audio.controls = true;
-        audio.preload = "metadata";
-        audio.src = rec.url;
-        tdPlay.appendChild(audio);
+        const isVideo = /\.(mp4|webm)$/i.test(rec.name || "");
+        const media = document.createElement(isVideo ? "video" : "audio");
+        media.controls = true;
+        media.preload = "metadata";
+        if (isVideo) {
+          media.className = "take-video";
+          media.playsInline = true;
+        }
+        media.src = rec.url;
+        tdPlay.appendChild(media);
         const tdDel = document.createElement("td");
         tdDel.className = "take-del-cell";
         const del = document.createElement("button");
@@ -1951,12 +2308,17 @@
       }
     }
 
+    function clearPreviewEl(el) {
+      if (!el) return;
+      el.pause();
+      el.removeAttribute("src");
+      el.load();
+      el.hidden = true;
+    }
+
     function discardPendingTake() {
-      if (previewTake) {
-        previewTake.pause();
-        previewTake.removeAttribute("src");
-        previewTake.load();
-      }
+      clearPreviewEl(previewTake);
+      clearPreviewEl(previewVideo);
       if (pendingTake && pendingTake.url) URL.revokeObjectURL(pendingTake.url);
       pendingTake = null;
       if (takePreview) takePreview.hidden = true;
@@ -1965,14 +2327,26 @@
     function showPendingTake(blob, mime) {
       discardPendingTake();
       const url = URL.createObjectURL(blob);
-      pendingTake = { blob, mime, url };
-      if (previewTake) {
-        previewTake.src = url;
-        previewTake.load();
+      const isVideo = String(mime || "").startsWith("video/");
+      pendingTake = { blob, mime, url, isVideo };
+      const el = isVideo ? previewVideo : previewTake;
+      if (el) {
+        el.hidden = false;
+        el.src = url;
+        el.load();
       }
       if (takePreview) takePreview.hidden = false;
       takePreview.scrollIntoView({ behavior: "smooth", block: "nearest" });
       setStatus("Preview your take, then Save or Discard.");
+    }
+
+    function pendingFilename() {
+      const mime = (pendingTake && pendingTake.mime) || "";
+      if (pendingTake && pendingTake.isVideo) return mime.includes("mp4") ? "video.mp4" : "video.webm";
+      if (mime.includes("mpeg") || mime.includes("mp3")) return "take.mp3";
+      if (mime.includes("ogg")) return "take.ogg";
+      if (mime.includes("mp4")) return "take.m4a";
+      return "take.webm";
     }
 
     async function savePendingTake() {
@@ -1981,9 +2355,7 @@
       setStatus("Saving take…");
       try {
         const body = new FormData();
-        const mime = pendingTake.mime || "audio/webm";
-        const ext = mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm";
-        body.append("file", pendingTake.blob, "take." + ext);
+        body.append("file", pendingTake.blob, pendingFilename());
         const info = await fetchJSON("/api/jobs/" + encodeURIComponent(BOOT.job_id) + "/recordings", {
           method: "POST",
           body,
@@ -1998,25 +2370,147 @@
       }
     }
 
-    function pickRecorderMime() {
-      const types = [
-        "audio/webm;codecs=opus",
-        "audio/webm",
-        "audio/mp4",
-        "audio/ogg;codecs=opus",
-      ];
+    function floatTo16(float32) {
+      const out = new Int16Array(float32.length);
+      for (let i = 0; i < float32.length; i++) {
+        const s = Math.max(-1, Math.min(1, float32[i]));
+        out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
+      return out;
+    }
+
+    function encodeMp3(audioBuf) {
+      const Encoder = window.lamejs && window.lamejs.Mp3Encoder;
+      if (!Encoder) throw new Error("MP3 encoder missing");
+      const channels = Math.min(2, audioBuf.numberOfChannels);
+      const enc = new Encoder(channels, audioBuf.sampleRate, 192);
+      const left = floatTo16(audioBuf.getChannelData(0));
+      const right = channels > 1 ? floatTo16(audioBuf.getChannelData(1)) : left;
+      const block = 1152;
+      const parts = [];
+      for (let i = 0; i < left.length; i += block) {
+        const l = left.subarray(i, i + block);
+        const r = right.subarray(i, i + block);
+        const buf = channels > 1 ? enc.encodeBuffer(l, r) : enc.encodeBuffer(l);
+        if (buf && buf.length) parts.push(buf);
+      }
+      const end = enc.flush();
+      if (end && end.length) parts.push(end);
+      return new Blob(parts, { type: "audio/mpeg" });
+    }
+
+    async function sniffContainer(blob) {
+      try {
+        const buf = new Uint8Array(await blob.slice(0, 16).arrayBuffer());
+        if (buf.length >= 8 && buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) return "mp4";
+        if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return "webm";
+      } catch (_) {}
+      return "";
+    }
+
+    function pickRecorderMime(kind) {
+      const types =
+        kind === "video"
+          ? [
+              "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+              "video/mp4;codecs=avc1,mp4a.40.2",
+              "video/mp4",
+              "video/webm;codecs=vp9,opus",
+              "video/webm;codecs=vp8,opus",
+              "video/webm",
+            ]
+          : [
+              "audio/webm;codecs=opus",
+              "audio/webm",
+              "audio/mp4",
+              "audio/ogg;codecs=opus",
+            ];
       for (const t of types) {
         if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
       }
       return "";
     }
 
+    function showCamPreview(stream) {
+      if (!camPreview || !camVideo || !stream) return;
+      camVideo.srcObject = stream;
+      camVideo.muted = true;
+      camVideo.setAttribute("playsinline", "");
+      camPreview.hidden = false;
+      camVideo.play().catch(() => {});
+    }
+
+    function hideCamPreview() {
+      if (camVideo) {
+        try {
+          camVideo.pause();
+        } catch (_) {}
+        camVideo.srcObject = null;
+      }
+      if (camPreview) camPreview.hidden = true;
+    }
+
+    function stopTracks(stream) {
+      if (!stream) return;
+      stream.getTracks().forEach((t) => {
+        try {
+          t.stop();
+        } catch (_) {}
+      });
+    }
+
+    async function getMedia(constraints) {
+      try {
+        return await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (err) {
+        if (constraints.audio && typeof constraints.audio === "object" && constraints.audio.deviceId) {
+          const retry = { ...constraints, audio: { ...constraints.audio } };
+          delete retry.audio.deviceId;
+          return await navigator.mediaDevices.getUserMedia(retry);
+        }
+        throw err;
+      }
+    }
+
+    async function openCapture(kind) {
+      const useClean = !!(selectedMicId || looksLikeInterfaceMic());
+      const audioOpts = useClean
+        ? {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          }
+        : {
+            echoCancellation: { ideal: true },
+            noiseSuppression: { ideal: true },
+            autoGainControl: { ideal: true },
+            channelCount: { ideal: 1 },
+          };
+      if (selectedMicId) audioOpts.deviceId = { exact: selectedMicId };
+      if (kind !== "video") {
+        return { mixStream: await getMedia({ audio: audioOpts }), previewStream: null, useClean };
+      }
+      const videoOpts = {
+        facingMode: { ideal: "user" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      };
+      try {
+        const both = await getMedia({ video: videoOpts, audio: audioOpts });
+        return { mixStream: both, previewStream: both, useClean };
+      } catch (_) {
+        const previewStream = await navigator.mediaDevices.getUserMedia({ video: videoOpts });
+        const mixStream = await getMedia({ audio: audioOpts });
+        return { mixStream, previewStream, useClean };
+      }
+    }
+
     function setRecordUi(on) {
-      if (!recordBtn) return;
-      recordBtn.classList.toggle("on", !!on);
-      recordBtn.setAttribute("aria-label", on ? "Stop recording" : "Record");
       if (recStrip) recStrip.hidden = !on;
-      if (!on) stopRecTimer();
+      if (!on) {
+        stopRecTimer();
+        hideCamPreview();
+      }
       syncRecordLabel();
     }
 
@@ -2039,40 +2533,25 @@
       if (recTimerEl) recTimerEl.textContent = "0:00";
     }
 
-    async function startRecording() {
+    async function startRecording(kind) {
+      kind = kind === "video" ? "video" : "audio";
       if (recording || recordBusy) return;
       if (!Object.keys(tracks).length) {
         setStatus("Stems are not ready yet.");
         return;
       }
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setStatus("Recording needs microphone permission in this browser.");
+        setStatus("Recording needs camera and microphone permission in this browser.");
         return;
       }
       recordBusy = true;
+      recordKind = kind;
       try {
         const ctx = ensureMetroCtx();
         wireAllStems();
-        const useClean = !!(selectedMicId || looksLikeInterfaceMic());
-        const audioOpts = useClean
-          ? {
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false,
-            }
-          : {
-              echoCancellation: { ideal: true },
-              noiseSuppression: { ideal: true },
-              autoGainControl: { ideal: true },
-              channelCount: { ideal: 1 },
-            };
-        if (selectedMicId) audioOpts.deviceId = { exact: selectedMicId };
-        try {
-          micStream = await navigator.mediaDevices.getUserMedia({ audio: audioOpts });
-        } catch (_) {
-          delete audioOpts.deviceId;
-          micStream = await navigator.mediaDevices.getUserMedia({ audio: audioOpts });
-        }
+        const cap = await openCapture(kind);
+        micStream = cap.mixStream;
+        camStream = cap.previewStream;
         await refreshMics();
         const track = micStream.getAudioTracks()[0];
         if (track && track.getSettings) {
@@ -2090,21 +2569,31 @@
         recBus.connect(recDest);
         micSource.connect(micGain);
         micGain.connect(recDest);
+        let recStream = recDest.stream;
+        if (kind === "video") {
+          const videoTrack = (camStream || micStream).getVideoTracks()[0];
+          if (!videoTrack) throw new Error("No camera");
+          recStream = new MediaStream([videoTrack, ...recDest.stream.getAudioTracks()]);
+          showCamPreview(camStream || micStream);
+        }
         recChunks = [];
-        const mime = pickRecorderMime();
-        let recOpts = { audioBitsPerSecond: 256000 };
+        const mime = pickRecorderMime(kind);
+        let recOpts =
+          kind === "video"
+            ? { audioBitsPerSecond: 192000, videoBitsPerSecond: 2500000 }
+            : { audioBitsPerSecond: 256000 };
         if (mime) recOpts.mimeType = mime;
         try {
-          mediaRecorder = new MediaRecorder(recDest.stream, recOpts);
+          mediaRecorder = new MediaRecorder(recStream, recOpts);
         } catch (_) {
           recOpts = mime ? { mimeType: mime } : {};
-          mediaRecorder = new MediaRecorder(recDest.stream, recOpts);
+          mediaRecorder = new MediaRecorder(recStream, recOpts);
         }
         mediaRecorder.ondataavailable = (e) => {
           if (e.data && e.data.size) recChunks.push(e.data);
         };
         mediaRecorder.onstop = () => {
-          finishRecording(mediaRecorder.mimeType || mime || "audio/webm");
+          finishRecording(mediaRecorder.mimeType || mime || (kind === "video" ? "video/webm" : "audio/webm"));
         };
         mediaRecorder.start(200);
         recording = true;
@@ -2112,8 +2601,8 @@
         startRecTimer();
         if (!playing) await playAll();
         setStatus(
-          "Recording" +
-            (useClean ? " (clean USB/mixer input)" : "") +
+          (kind === "video" ? "Recording video" : "Recording") +
+            (cap.useClean ? " (clean USB/mixer input)" : "") +
             " · mic " +
             Math.round(recMicGain * 100) +
             "%"
@@ -2121,7 +2610,11 @@
       } catch (e) {
         cleanupMic();
         setRecordUi(false);
-        setStatus("Record failed: " + (e.message || e) + " — allow the microphone.");
+        setStatus(
+          "Record failed: " +
+            (e.message || e) +
+            (kind === "video" ? " — allow the camera and microphone." : " — allow the microphone.")
+        );
       } finally {
         recordBusy = false;
       }
@@ -2135,21 +2628,21 @@
       try {
         if (mediaRecorder.state !== "inactive") mediaRecorder.stop();
       } catch (_) {
-        finishRecording("audio/webm");
+        finishRecording(recordKind === "video" ? "video/webm" : "audio/webm");
       }
     }
 
     function cleanupMic() {
       stopRecTimer();
+      hideCamPreview();
       try {
         if (micGain) micGain.disconnect();
       } catch (_) {}
       try {
         if (micSource) micSource.disconnect();
       } catch (_) {}
-      if (micStream) {
-        micStream.getTracks().forEach((t) => t.stop());
-      }
+      if (camStream && camStream !== micStream) stopTracks(camStream);
+      stopTracks(micStream);
       try {
         if (recDest && recBus) recBus.disconnect(recDest);
       } catch (_) {}
@@ -2159,6 +2652,7 @@
       micGain = null;
       micSource = null;
       micStream = null;
+      camStream = null;
       recDest = null;
       mediaRecorder = null;
     }
@@ -2166,17 +2660,42 @@
     async function finishRecording(mime) {
       const chunks = recChunks.slice();
       recChunks = [];
+      const kind = recordKind;
       cleanupMic();
       if (!chunks.length) {
         setStatus("Recording was empty.");
         return;
       }
-      showPendingTake(new Blob(chunks, { type: mime || "audio/webm" }), mime || "audio/webm");
+      const isVideo = kind === "video" || String(mime || "").startsWith("video/");
+      const raw = new Blob(chunks, { type: mime || (isVideo ? "video/webm" : "audio/webm") });
+      if (isVideo) {
+        const sniffed = await sniffContainer(raw);
+        const ext = sniffed === "mp4" || String(mime || "").includes("mp4") ? "mp4" : "webm";
+        const blob = ext === "mp4" ? new Blob([raw], { type: "video/mp4" }) : raw;
+        showPendingTake(blob, blob.type || "video/" + ext);
+        setStatus(
+          ext === "mp4"
+            ? "Preview the video, then Save or Discard."
+            : "Preview the video (WebM — this browser cannot record MP4). Then Save or Discard."
+        );
+        return;
+      }
+      setStatus("Making MP3…");
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        const decodeCtx = new AC();
+        const decoded = await decodeCtx.decodeAudioData(await raw.arrayBuffer());
+        decodeCtx.close().catch(() => {});
+        showPendingTake(encodeMp3(decoded), "audio/mpeg");
+      } catch (e) {
+        showPendingTake(raw, mime || "audio/webm");
+        setStatus("Could not make MP3 (" + (e.message || e) + "). Preview the original, then Save.");
+      }
     }
 
-    async function toggleRecord() {
+    async function toggleRecord(kind) {
       if (recording) stopRecording();
-      else await startRecording();
+      else await startRecording(kind);
     }
 
     async function pollSeparate(taskId) {
@@ -2335,6 +2854,7 @@
       applyAudibility();
       setStatus("Ready — " + names.length + " stems. Change Key while playing.");
       ensureKeyDetected();
+      ensureActivityProfile();
 
       const master = tracks[names[0]].audio;
       master.addEventListener("loadedmetadata", updateSeekUI);
@@ -2483,6 +3003,46 @@
       seekToRatio(parseInt(seekEl.value, 10) / 1000);
       seeking = false;
     });
+    if (activityPlotWrap) {
+      activityPlotWrap.addEventListener("pointerdown", (ev) => {
+        const ratio = activityRatioFromEvent(ev);
+        plotDrag = { start: ratio, last: ratio, moved: false };
+        try { activityPlotWrap.setPointerCapture(ev.pointerId); } catch (_) {}
+      });
+      activityPlotWrap.addEventListener("pointermove", (ev) => {
+        if (!plotDrag) return;
+        const ratio = activityRatioFromEvent(ev);
+        plotDrag.last = ratio;
+        if (Math.abs(ratio - plotDrag.start) > 0.012) {
+          plotDrag.moved = true;
+          renderActivityPlot();
+        }
+      });
+      activityPlotWrap.addEventListener("pointerup", (ev) => {
+        const drag = plotDrag;
+        plotDrag = null;
+        if (!drag) return;
+        const ratio = activityRatioFromEvent(ev);
+        if (drag.moved && setLoop(drag.start, ratio)) return;
+        seekToRatio(drag.moved ? drag.start : ratio);
+        renderActivityPlot();
+      });
+      activityPlotWrap.addEventListener("pointercancel", () => {
+        plotDrag = null;
+        renderActivityPlot();
+      });
+    }
+    if (loopClearBtn) loopClearBtn.onclick = clearLoop;
+    if (loopDownloadBtn) loopDownloadBtn.onclick = downloadLoop;
+    if (activityLegend) {
+      activityLegend.addEventListener("change", (ev) => {
+        const el = ev.target;
+        if (!el || !el.dataset || !el.dataset.series) return;
+        activityOn[el.dataset.series] = !!el.checked;
+        saveActivityOn();
+        renderActivityPlot();
+      });
+    }
 
 
     // —— GitHub Pages static demo (no FastAPI) ——
@@ -2492,6 +3052,7 @@
       }
       downloadMix = async () => blocked("Download mix");
       downloadStems = async () => blocked("Download stems");
+      downloadLoop = async () => blocked("Download loop");
       runStems = async () => blocked("Stem separation");
       runBeats = async () => blocked("Beat detect");
       runChords = async () => blocked("Chord detect");
@@ -2514,6 +3075,7 @@
       // Re-bind handlers (onclick already pointed at the original functions)
       if (downloadBtn) downloadBtn.onclick = downloadMix;
       if (downloadStemsBtn) downloadStemsBtn.onclick = downloadStems;
+      if (loopDownloadBtn) loopDownloadBtn.onclick = downloadLoop;
       if (detectChordsBtn) detectChordsBtn.onclick = runChords;
       if (rerunStemsBtn) rerunStemsBtn.onclick = () => { setMoreOpen(false); runStems(true); };
       if (rerunBeatsBtn) rerunBeatsBtn.onclick = () => { setMoreOpen(false); runBeats(); };
@@ -2545,6 +3107,8 @@
       }
       const takesWrap = document.getElementById("takesWrap");
       if (takesWrap) takesWrap.hidden = true;
+      const recordRow = document.querySelector(".transport-record");
+      if (recordRow) recordRow.style.display = "none";
       if (recordBtn) recordBtn.hidden = true;
       const demoNote = document.createElement("p");
       demoNote.className = "footer-note";

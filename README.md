@@ -1,6 +1,6 @@
 # Practice Stems
 
-Practice app for Mac/Linux: YouTube or local audio/video → Demucs **6-stem** split → live mixer (volume / mute / solo), plus **Loopz** (drum loops + jam chords).
+Practice app for Mac/Linux: YouTube or local audio/video → Demucs **6-stem** split → live mixer (volume / mute / solo), plus **Loopz** (drum loops, jam chords, and recording).
 
 Stems: **vocals, drums, bass, guitar, piano, other** (`htdemucs_6s`).
 
@@ -10,7 +10,7 @@ Home — YouTube / upload, library, and Loopz:
 
 ![Home screen](docs/home.png)
 
-Stem mixer — Play, BPM / Key, metronome, detect & show chords, record takes, presets, faders:
+Stem mixer — Play, BPM / Key, metronome, detect & show chords, record audio or video takes, presets, faders:
 
 ![Stem mixer](docs/player-stems.png)
 
@@ -18,7 +18,7 @@ Presets (Guitarist, Drummer, Singer, …):
 
 ![Stem mixer presets](docs/player-stems.gif)
 
-Loopz — drum loops, piano/bass jam chords, tempo & key:
+Loopz — drum loops, piano / bass / guitar jam chords, tempo & key, record with the band:
 
 ![Loopz](docs/loopz.png)
 
@@ -114,9 +114,9 @@ Open `https://<user>.github.io/practice-stems/` — stem demo uses NCS *Fearless
    - Transport: **Play**, **BPM −/+**, **Key −/+**, metronome
    - Chords: **Detect chords**, **Play chords**, **Show chords** (opens the chord list / chart under the transport)
    - ⋯ menu: **Rerun stems**, **Device** (Auto/CPU), **Detect beats** / **Rerun beats**, **Rerun chords**, **Speed**, **HQ speed** (Rubber Band when On)
-   - Mixer card: role **presets**, per-stem volume / **Mute** / **Solo**, **Download mix** / **Download stems**
-   - **Record** → preview → save under **Takes** (headphones recommended)
-3. **Loopz** (from Home) — pick a drum loop, jam chords (piano + bass), tempo / key / metronome; mute kit parts in **Drum mix**.
+   - Mixer card: role **presets**, per-stem volume / **Mute** / **Solo**, **Download mix** / **Download stems**. Drag the activity plot to loop a section, then **Download loop**
+   - **Record audio** (saved as MP3) or **Record video** (camera + mix, MP4 or WebM) → preview → save under **Takes**. Mic and mix levels sit next to the buttons. Headphones recommended — you hear the song, not your voice
+3. **Loopz** (from Home) — drum loop, jam chords (piano, bass, clean guitar), tempo / key / metronome; mute kit parts in **Drum mix**. **Record audio** downloads an MP3 of the band plus your mic. **Record video** downloads the camera with that mix (MP4 in Safari / iPhone, WebM in other browsers).
 4. **Delete** (× on a library row) removes a song.
 
 Prefer **0.75×–0.9×** for practice; turn **HQ speed On** when quality matters.
@@ -127,7 +127,7 @@ Prefer **0.75×–0.9×** for practice; turn **HQ speed On** when quality matter
 
 ```
 practice_stems/data/
-  play/          # library + MP3s for the mixer
+  play/          # library, mixer MP3s, and saved takes (`recordings/`)
   _incoming/     # downloads + Demucs WAV stems
   _uploads/      # temporary uploads
 ```

@@ -253,6 +253,136 @@
       bpm: 100,
       drums: {},
     },
+    {
+      id: "patch-rock",
+      name: "Rock + fill",
+      genre: "Patch",
+      bpm: 110,
+      bars: [
+        {
+          kick: "x-----x-x-------",
+          snare: "----x-------x---",
+          hat: "x-x-x-x-x-x-x-x-",
+          open: "--------------x-",
+        },
+        {
+          kick: "x-----x-x-------",
+          snare: "----x-------x---",
+          hat: "x-x-x-x-x-x-x-x-",
+          open: "--------------x-",
+        },
+        {
+          kick: "x-----x-x---x---",
+          snare: "----x-------x---",
+          hat: "xxxxxxxxxxxxxxxx",
+          open: "------x-------x-",
+        },
+        {
+          kick: "x-------x---x---",
+          snare: "----x---xxxxxxxx",
+          hat: "x-x-x-x---------",
+          tom: "--------x-x-x-x-",
+        },
+      ],
+    },
+    {
+      id: "patch-drop",
+      name: "Full to half",
+      genre: "Patch",
+      bpm: 100,
+      bars: [
+        {
+          kick: "x-----x-x-------",
+          snare: "----x-------x---",
+          hat: "x-x-x-x-x-x-x-x-",
+        },
+        {
+          kick: "x-------x---x---",
+          snare: "----x-------x---",
+          hat: "xxxxxxxxxxxxxxxx",
+          open: "------x---------",
+        },
+        {
+          kick: "x---------------",
+          snare: "--------x-------",
+          hat: "x-x-x-x-x-x-x-x-",
+          open: "------x-------x-",
+        },
+        {
+          kick: "x-------x-------",
+          snare: "--------x-------",
+          hat: "x---x---x---x---",
+          ride: "--------x-------",
+        },
+      ],
+    },
+    {
+      id: "patch-pop",
+      name: "Pop lift",
+      genre: "Patch",
+      bpm: 108,
+      bars: [
+        {
+          kick: "x-----x---x-----",
+          snare: "----x-------x---",
+          hat: "x-x-x-x-x-x-x-x-",
+          clap: "----x-------x---",
+        },
+        {
+          kick: "x-----x---x-----",
+          snare: "----x-------x---",
+          hat: "x-x-x-x-x-x-x-x-",
+          open: "----------x-----",
+        },
+        {
+          kick: "x---x---x---x---",
+          snare: "----x-------x---",
+          hat: "x-x-x-x-x-x-x-x-",
+          open: "--x---x---x---x-",
+          clap: "----x-------x---",
+        },
+        {
+          kick: "x---x---x-x-x---",
+          snare: "----x-------x---",
+          hat: "xxxxxxxxxxxxxxxx",
+          open: "------x-------x-",
+          clap: "----x-------x---",
+        },
+      ],
+    },
+    {
+      id: "patch-funk",
+      name: "Funk push",
+      genre: "Patch",
+      bpm: 96,
+      bars: [
+        {
+          kick: "x--x--x-----x---",
+          snare: "----x--o-o--x---",
+          hat: "x-x-x-x-x-x-x-x-",
+          open: "------x-------x-",
+        },
+        {
+          kick: "x--x-----x--x---",
+          snare: "----x--o----x--o",
+          hat: "x-xxx-x-x-xxx-x-",
+          open: "------x-------x-",
+        },
+        {
+          kick: "x--x--x-----x---",
+          snare: "----x--o-o--x---",
+          hat: "x-x-x-x-x-x-x-x-",
+          clap: "----x-------x---",
+        },
+        {
+          kick: "x-----x---x-x---",
+          snare: "----x---xxxx----",
+          hat: "x-x-x-x---------",
+          tom: "----------x-x-x-",
+          open: "------x---------",
+        },
+      ],
+    },
   ];
 
   const GENRES = ["All", ...Array.from(new Set(LOOPS.map((l) => l.genre)))];
@@ -294,6 +424,7 @@
   const metroBtn = document.getElementById("metroBtn");
   const tempoEl = document.getElementById("tempo");
   const bpmNum = document.getElementById("bpmNum");
+  const bpmLab = document.getElementById("bpmLab");
   const loopVolEl = document.getElementById("loopVol");
   const loopVolVal = document.getElementById("loopVolVal");
   const metroVolEl = document.getElementById("metroVol");
@@ -324,13 +455,29 @@
   const pianoVolVal = document.getElementById("pianoVolVal");
   const bassVolEl = document.getElementById("bassVol");
   const bassVolVal = document.getElementById("bassVolVal");
+  const guitarVolEl = document.getElementById("guitarVol");
+  const guitarVolVal = document.getElementById("guitarVolVal");
+  const shapeSeg = document.getElementById("shapeSeg");
+  const shapeEverySel = document.getElementById("shapeEverySel");
+  const shapeHint = document.getElementById("shapeHint");
+  const recordBtn = document.getElementById("recordBtn");
+  const recordVideoBtn = document.getElementById("recordVideoBtn");
+  const camPreview = document.getElementById("camPreview");
+  const camVideo = document.getElementById("camVideo");
+  const micSel = document.getElementById("micSel");
+  const recTimer = document.getElementById("recTimer");
+  const recNote = document.getElementById("recNote");
+  const takeAudio = document.getElementById("takeAudio");
+  const takeVideo = document.getElementById("takeVideo");
 
   let ctx = null;
   let masterGain = null;
   let metroGain = null;
   let roomGain = null;
+  let mixBus = null;
   let pianoGain = null;
   let bassGain = null;
+  let guitarGain = null;
   let voiceGain = {};
   let buffers = {};
   let kitReady = false;
@@ -339,6 +486,8 @@
   let openHatGain = null;
   let playing = false;
   let timerId = null;
+  let clockNode = null;
+  let wakeLock = null;
   let nextStepTime = 0;
   let currentStep = 0;
   let countInLeft = 0;
@@ -357,8 +506,27 @@
   let jamTranspose = 0;
   let currentBar = 0;
   let displayBar = 0;
+  let drumBar = 0;
   let pianoVol = 0.7;
   let bassVol = 0.8;
+  let guitarVol = 0.55;
+  let shape = "steady";
+  let shapeEvery = 4;
+  let playedBeats = 0;
+  let selectedMicId = "";
+  let recording = false;
+  let recordKind = "audio";
+  let camStream = null;
+  let recordBusy = false;
+  let mediaRecorder = null;
+  let recChunks = [];
+  let micStream = null;
+  let micSource = null;
+  let micGain = null;
+  let recDest = null;
+  let recTimerId = null;
+  let recStartedAt = 0;
+  let takeUrl = "";
   let muted = {};
   let voiceVol = {};
   VOICES.forEach((v) => {
@@ -369,6 +537,22 @@
 
   function currentLoop() {
     return LOOPS.find((l) => l.id === loopId) || LOOPS[0];
+  }
+
+  function drumsForBar(loop, bar) {
+    if (loop.bars && loop.bars.length) {
+      const i = ((bar % loop.bars.length) + loop.bars.length) % loop.bars.length;
+      return loop.bars[i] || {};
+    }
+    return loop.drums || {};
+  }
+
+  function rampTempo(step) {
+    if (step % 4 !== 0) return;
+    if (playedBeats > 0 && shape !== "steady" && playedBeats % Math.max(1, shapeEvery) === 0) {
+      bpm = Math.max(40, Math.min(220, bpm + (shape === "build" ? 1 : -1)));
+    }
+    playedBeats += 1;
   }
 
   function velAt(pattern, step) {
@@ -396,20 +580,25 @@
       const lp = ctx.createBiquadFilter();
       lp.type = "lowpass";
       lp.frequency.value = 3200;
-      masterGain.connect(ctx.destination);
+      mixBus = ctx.createGain();
+      mixBus.connect(ctx.destination);
+      masterGain.connect(mixBus);
       masterGain.connect(delay);
       delay.connect(lp);
       lp.connect(fb);
       fb.connect(delay);
       lp.connect(roomGain);
-      roomGain.connect(ctx.destination);
+      roomGain.connect(mixBus);
       metroGain.connect(ctx.destination);
       pianoGain = ctx.createGain();
       bassGain = ctx.createGain();
+      guitarGain = ctx.createGain();
       pianoGain.gain.value = pianoVol;
       bassGain.gain.value = bassVol;
-      pianoGain.connect(ctx.destination);
-      bassGain.connect(ctx.destination);
+      guitarGain.gain.value = guitarVol;
+      pianoGain.connect(mixBus);
+      bassGain.connect(mixBus);
+      guitarGain.connect(mixBus);
       VOICES.forEach((v) => {
         const g = ctx.createGain();
         g.gain.value = muted[v.id] ? 0 : voiceVol[v.id];
@@ -418,7 +607,58 @@
       });
     }
     if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    ensureClock();
     return ctx;
+  }
+
+  function ensureClock() {
+    if (clockNode || !ctx) return;
+    const proc = ctx.createScriptProcessor(2048, 1, 1);
+    const osc = ctx.createOscillator();
+    const keep = ctx.createGain();
+    osc.frequency.value = 440;
+    keep.gain.value = 0.00001;
+    proc.onaudioprocess = () => {
+      try {
+        pumpScheduler();
+      } catch (_) {}
+    };
+    osc.connect(proc);
+    proc.connect(keep);
+    keep.connect(ctx.destination);
+    osc.start();
+    clockNode = proc;
+  }
+
+  async function holdWake() {
+    if (!navigator.wakeLock || wakeLock) return;
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => {
+        wakeLock = null;
+      });
+    } catch (_) {}
+  }
+
+  function dropWake() {
+    const lock = wakeLock;
+    wakeLock = null;
+    if (lock) lock.release().catch(() => {});
+  }
+
+  function syncSession() {
+    if (playing || recording) holdWake();
+    else dropWake();
+    if (!navigator.mediaSession) return;
+    navigator.mediaSession.playbackState = playing ? "playing" : "paused";
+    if (typeof MediaMetadata === "function") {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: currentLoop().name,
+          artist: "Loopz",
+        });
+      } catch (_) {}
+    }
   }
 
   async function loadKit() {
@@ -460,6 +700,7 @@
     metroGain.gain.setTargetAtTime(metroVol, ctx.currentTime, 0.02);
     if (pianoGain) pianoGain.gain.setTargetAtTime(pianoVol, ctx.currentTime, 0.02);
     if (bassGain) bassGain.gain.setTargetAtTime(bassVol, ctx.currentTime, 0.02);
+    if (guitarGain) guitarGain.gain.setTargetAtTime(guitarVol, ctx.currentTime, 0.02);
     VOICES.forEach((v) => {
       const val = muted[v.id] ? 0 : voiceVol[v.id];
       voiceGain[v.id].gain.setTargetAtTime(val, ctx.currentTime, 0.02);
@@ -679,6 +920,82 @@
     uniq.slice(0, 4).forEach((m, i) => playEpNote(t, m, vel * (1 - i * 0.08)));
   }
 
+  const STRUM = [
+    { step: 0, dir: 1, vel: 1 },
+    { step: 4, dir: 1, vel: 0.7 },
+    { step: 6, dir: -1, vel: 0.52 },
+    { step: 8, dir: 1, vel: 0.82 },
+    { step: 10, dir: -1, vel: 0.48 },
+    { step: 12, dir: 1, vel: 0.74 },
+    { step: 14, dir: -1, vel: 0.46 },
+  ];
+
+  function guitarNotes(ch) {
+    const tones = ch.ints.slice();
+    const notes = [];
+    const low = toMidiRange(ch.pc, 40, 52);
+    notes.push(low);
+    let cursor = low;
+    let guard = 0;
+    while (notes.length < 5 && guard < 24) {
+      guard += 1;
+      const iv = tones[notes.length % tones.length];
+      let n = ch.pc + iv;
+      while (n <= cursor) n += 12;
+      if (n > 76) break;
+      notes.push(n);
+      cursor = n;
+    }
+    return notes;
+  }
+
+  function playGuitarString(t, midi, vel) {
+    if (!guitarGain || vel <= 0) return;
+    const f = midiFreq(midi);
+    const dur = 0.4 + vel * 0.32;
+    const osc = ctx.createOscillator();
+    const partial = ctx.createOscillator();
+    const partialG = ctx.createGain();
+    const lp = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(f * 1.012, t);
+    osc.frequency.exponentialRampToValueAtTime(f, t + 0.028);
+    partial.type = "sine";
+    partial.frequency.value = f * 2;
+    partialG.gain.value = 0.12;
+    lp.type = "lowpass";
+    lp.frequency.setValueAtTime(1400 + vel * 1800, t);
+    lp.frequency.exponentialRampToValueAtTime(700, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, 0.16 * vel), t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(lp);
+    partial.connect(partialG);
+    partialG.connect(lp);
+    lp.connect(g);
+    g.connect(guitarGain);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+    partial.start(t);
+    partial.stop(t + dur + 0.02);
+  }
+
+  function playGuitarStrum(t, sym, dir, vel) {
+    const ch = parseChord(sym);
+    if (!ch) return;
+    const notes = guitarNotes(ch);
+    const ordered = dir < 0 ? notes.slice().reverse() : notes;
+    ordered.forEach((m, i) => playGuitarString(t + i * 0.012, m, vel * (1 - i * 0.06)));
+  }
+
+  function playGuitar(step, time) {
+    if (!jamOn || guitarVol <= 0.001) return;
+    const hit = STRUM.find((s) => s.step === step);
+    if (!hit) return;
+    playGuitarStrum(time, chordAt(currentBar), hit.dir, hit.vel);
+  }
+
   function playBassNote(t, midi, vel) {
     if (!bassGain) return;
     const f = midiFreq(midi);
@@ -745,7 +1062,8 @@
   function scheduleStep(step, time) {
     const drumsOn = countInLeft <= 0;
     const loop = currentLoop();
-    const drums = loop.drums || {};
+    const drums = drumsForBar(loop, drumBar);
+    if (drumsOn) rampTempo(step);
     if (drumsOn) {
       const kick = velAt(drums.kick, step);
       const snare = velAt(drums.snare, step);
@@ -762,25 +1080,44 @@
       if (ride) playRide(humanTime(time), humanVel(ride));
       if (tom) playTom(humanTime(time), humanVel(tom));
     }
-    if (drumsOn) playJam(step, time);
+    if (drumsOn) {
+      playJam(step, time);
+      playGuitar(step, time);
+    }
     if (metroOn && isMetroBeat(step)) playClick(time, isDownbeat(step));
     uiQueue.push({ step, time, bar: currentBar });
   }
 
-  function scheduler() {
+  function pumpScheduler() {
     if (!playing || !ctx) return;
-    const ahead = 0.12;
-    while (nextStepTime < ctx.currentTime + ahead) {
+    const ahead = 0.3;
+    let guard = 0;
+    while (nextStepTime < ctx.currentTime + ahead && guard < 64) {
       const wasCounting = countInLeft > 0;
       scheduleStep(currentStep, nextStepTime + swingOffset(currentStep));
       nextStepTime += stepDuration();
       currentStep = (currentStep + 1) % 16;
       if (countInLeft > 0) countInLeft -= 1;
-      if (!wasCounting && currentStep === 0 && jamChords.length) {
-        currentBar = (currentBar + 1) % jamChords.length;
+      if (!wasCounting && currentStep === 0) {
+        drumBar += 1;
+        if (jamChords.length) currentBar = (currentBar + 1) % jamChords.length;
       }
+      guard += 1;
     }
-    timerId = setTimeout(scheduler, 25);
+  }
+
+  function scheduler() {
+    ensureClock();
+    pumpScheduler();
+    if (timerId) clearTimeout(timerId);
+    const tick = () => {
+      if (!playing) return;
+      try {
+        pumpScheduler();
+      } catch (_) {}
+      timerId = setTimeout(tick, 25);
+    };
+    timerId = setTimeout(tick, 25);
   }
 
   function drainUI() {
@@ -792,6 +1129,7 @@
         if (ev.bar != null) displayBar = ev.bar;
         paintBeats();
         paintJam();
+        paintShape();
         bpmNum.classList.toggle("pulse", displayStep % 4 === 0);
       }
     }
@@ -804,6 +1142,26 @@
       el.classList.toggle("on", playing && i === displayStep);
       el.classList.toggle("down", i % 4 === 0);
     });
+  }
+
+  function paintShape() {
+    bpmNum.textContent = String(bpm);
+    if (bpmLab) bpmLab.textContent = "BPM";
+    if (tempoEl && document.activeElement !== tempoEl && tempoEl.value !== String(bpm)) {
+      tempoEl.value = String(bpm);
+    }
+    if (shapeSeg) {
+      shapeSeg.querySelectorAll("button").forEach((b) => {
+        b.classList.toggle("on", b.dataset.shape === shape);
+      });
+    }
+    if (!shapeHint) return;
+    if (shape === "steady") {
+      shapeHint.textContent = "";
+      return;
+    }
+    const dir = shape === "build" ? "+1" : "−1";
+    shapeHint.textContent = dir + " BPM every " + shapeEvery + " beats";
   }
 
   function paintJam() {
@@ -893,7 +1251,7 @@
   function setBpm(next, fromLoop) {
     bpm = Math.max(40, Math.min(220, Math.round(next)));
     tempoEl.value = String(bpm);
-    bpmNum.textContent = String(bpm);
+    paintShape();
     if (!fromLoop) savePrefs();
   }
 
@@ -912,6 +1270,7 @@
   function setPlaying(on) {
     playing = on;
     setPlayUi(on);
+    syncSession();
   }
   setPlayUi(false);
 
@@ -931,6 +1290,8 @@
       currentBar = 0;
       displayBar = 0;
       countInLeft = countInEl.checked ? 16 : 0;
+      drumBar = 0;
+      playedBeats = 0;
     }
     paintJam();
     nextStepTime = ctx.currentTime + 0.06;
@@ -975,6 +1336,7 @@
         alert("Web Audio is not available in this browser.");
         return;
       }
+      holdWake();
       if (ctx.state === "suspended") {
         try {
           await ctx.resume();
@@ -994,11 +1356,14 @@
       metroOn = true;
       syncVolUI();
     }
+    drumBar = 0;
+    playedBeats = 0;
     if (!keepTempoEl.checked) setBpm(loop.bpm, true);
     nowName.textContent = loop.name;
     nowMeta.textContent =
       loop.genre +
       " · 4/4" +
+      (loop.bars ? " · " + loop.bars.length + "-bar variation" : "") +
       (loop.swing ? " · swing" : "") +
       " · default " +
       loop.bpm +
@@ -1033,7 +1398,12 @@
         '<span class="loop-name"></span><span class="loop-meta"></span>';
       b.querySelector(".loop-name").textContent = loop.name;
       b.querySelector(".loop-meta").textContent =
-        loop.genre + " · " + loop.bpm + " BPM" + (loop.swing ? " · swing" : "");
+        loop.genre +
+        " · " +
+        loop.bpm +
+        " BPM" +
+        (loop.bars ? " · variations" : "") +
+        (loop.swing ? " · swing" : "");
       b.onclick = () => selectLoop(loop.id);
       loopGrid.appendChild(b);
     });
@@ -1093,6 +1463,10 @@
           jamTranspose,
           pianoVol,
           bassVol,
+          guitarVol,
+          shape,
+          shapeEvery,
+          selectedMicId,
         })
       );
     } catch (_) {}
@@ -1117,6 +1491,10 @@
       if (typeof p.jamTranspose === "number") jamTranspose = p.jamTranspose;
       if (p.pianoVol != null) pianoVol = p.pianoVol;
       if (p.bassVol != null) bassVol = p.bassVol;
+      if (p.guitarVol != null) guitarVol = p.guitarVol;
+      if (p.shape === "steady" || p.shape === "build" || p.shape === "thin") shape = p.shape;
+      if ([2, 4, 8, 16].includes(p.shapeEvery)) shapeEvery = p.shapeEvery;
+      if (typeof p.selectedMicId === "string") selectedMicId = p.selectedMicId;
       keepTempoEl.checked = !!p.keepTempo;
       countInEl.checked = !!p.countIn;
     } catch (_) {}
@@ -1132,12 +1510,16 @@
     if (jamOnEl) jamOnEl.checked = jamOn;
     if (pianoVolEl) pianoVolEl.value = String(pianoVol);
     if (bassVolEl) bassVolEl.value = String(bassVol);
+    if (guitarVolEl) guitarVolEl.value = String(guitarVol);
     if (pianoVolVal) pianoVolVal.textContent = Math.round(pianoVol * 100) + "%";
     if (bassVolVal) bassVolVal.textContent = Math.round(bassVol * 100) + "%";
+    if (guitarVolVal) guitarVolVal.textContent = Math.round(guitarVol * 100) + "%";
+    if (shapeEverySel) shapeEverySel.value = String(shapeEvery);
+    paintShape();
     if (jamProgEl) jamProgEl.value = jamChords.join(" ");
     meterSel.value = String(beatsPerBar);
     tempoEl.value = String(bpm);
-    bpmNum.textContent = String(bpm);
+    paintShape();
   }
 
   function onTap() {
@@ -1172,6 +1554,387 @@
   drainUI();
   Object.values(KIT_URLS).forEach((url) => fetch(url).catch(() => {}));
 
+  function fmtRec(sec) {
+    const s = Math.max(0, Math.floor(sec));
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }
+
+  function pickRecorderMime(kind) {
+    const types =
+      kind === "video"
+        ? [
+            "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+            "video/mp4;codecs=avc1,mp4a.40.2",
+            "video/mp4",
+            "video/webm;codecs=vp9,opus",
+            "video/webm;codecs=vp8,opus",
+            "video/webm",
+          ]
+        : ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+    for (const t of types) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
+    }
+    return "";
+  }
+
+  async function refreshMics() {
+    if (!micSel || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const mics = devices.filter((d) => d.kind === "audioinput");
+      const prev = selectedMicId || micSel.value || "";
+      micSel.innerHTML = "";
+      if (!mics.length) {
+        const o = document.createElement("option");
+        o.value = "";
+        o.textContent = "Default microphone";
+        micSel.appendChild(o);
+      } else {
+        mics.forEach((d, i) => {
+          const o = document.createElement("option");
+          o.value = d.deviceId || "";
+          o.textContent = d.label || "Microphone " + (i + 1);
+          micSel.appendChild(o);
+        });
+      }
+      if (prev && Array.from(micSel.options).some((o) => o.value === prev)) micSel.value = prev;
+      selectedMicId = micSel.value || "";
+    } catch (_) {}
+  }
+
+  function setRecordUi(on) {
+    if (recordBtn) {
+      const active = on && recordKind === "audio";
+      recordBtn.classList.toggle("on", active);
+      recordBtn.textContent = active ? "● Stop" : "● Record audio";
+      recordBtn.disabled = on && recordKind !== "audio";
+      recordBtn.setAttribute("aria-label", active ? "Stop recording" : "Record audio");
+    }
+    if (recordVideoBtn) {
+      const active = on && recordKind === "video";
+      recordVideoBtn.classList.toggle("on", active);
+      recordVideoBtn.textContent = active ? "● Stop" : "● Record video";
+      recordVideoBtn.disabled = on && recordKind !== "video";
+      recordVideoBtn.setAttribute("aria-label", active ? "Stop recording" : "Record video");
+    }
+    if (recTimer) recTimer.hidden = !on;
+    if (!on) hideCamPreview();
+  }
+
+  function startRecTimer() {
+    recStartedAt = Date.now();
+    if (recTimer) recTimer.textContent = "0:00";
+    if (recTimerId) clearInterval(recTimerId);
+    recTimerId = setInterval(() => {
+      if (recTimer) recTimer.textContent = fmtRec((Date.now() - recStartedAt) / 1000);
+    }, 200);
+  }
+
+  function stopRecTimer() {
+    if (recTimerId) clearInterval(recTimerId);
+    recTimerId = null;
+  }
+
+  function showCamPreview(stream) {
+    if (!camPreview || !camVideo || !stream) return;
+    camVideo.srcObject = stream;
+    camVideo.muted = true;
+    camVideo.setAttribute("playsinline", "");
+    camPreview.hidden = false;
+    camVideo.play().catch(() => {});
+  }
+
+  function hideCamPreview() {
+    if (camVideo) {
+      try {
+        camVideo.pause();
+      } catch (_) {}
+      camVideo.srcObject = null;
+    }
+    if (camPreview) camPreview.hidden = true;
+  }
+
+  function stopTracks(stream) {
+    if (!stream) return;
+    stream.getTracks().forEach((t) => {
+      try {
+        t.stop();
+      } catch (_) {}
+    });
+  }
+
+  async function getMedia(constraints) {
+    try {
+      return await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (err) {
+      if (constraints.audio && typeof constraints.audio === "object" && constraints.audio.deviceId) {
+        const retry = { ...constraints, audio: { ...constraints.audio } };
+        delete retry.audio.deviceId;
+        return await navigator.mediaDevices.getUserMedia(retry);
+      }
+      throw err;
+    }
+  }
+
+  function cleanupMic() {
+    stopRecTimer();
+    hideCamPreview();
+    try {
+      if (micGain) micGain.disconnect();
+    } catch (_) {}
+    try {
+      if (micSource) micSource.disconnect();
+    } catch (_) {}
+    if (camStream && camStream !== micStream) stopTracks(camStream);
+    stopTracks(micStream);
+    try {
+      if (recDest && mixBus) mixBus.disconnect(recDest);
+    } catch (_) {}
+    micGain = null;
+    micSource = null;
+    micStream = null;
+    camStream = null;
+    recDest = null;
+    mediaRecorder = null;
+  }
+
+  function floatTo16(float32) {
+    const out = new Int16Array(float32.length);
+    for (let i = 0; i < float32.length; i++) {
+      const s = Math.max(-1, Math.min(1, float32[i]));
+      out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return out;
+  }
+
+  function encodeMp3(audioBuf) {
+    const Encoder = window.lamejs && window.lamejs.Mp3Encoder;
+    if (!Encoder) throw new Error("MP3 encoder missing");
+    const channels = Math.min(2, audioBuf.numberOfChannels);
+    const enc = new Encoder(channels, audioBuf.sampleRate, 128);
+    const left = floatTo16(audioBuf.getChannelData(0));
+    const right = channels > 1 ? floatTo16(audioBuf.getChannelData(1)) : left;
+    const block = 1152;
+    const parts = [];
+    for (let i = 0; i < left.length; i += block) {
+      const l = left.subarray(i, i + block);
+      const r = right.subarray(i, i + block);
+      const buf = channels > 1 ? enc.encodeBuffer(l, r) : enc.encodeBuffer(l);
+      if (buf && buf.length) parts.push(buf);
+    }
+    const end = enc.flush();
+    if (end && end.length) parts.push(end);
+    return new Blob(parts, { type: "audio/mpeg" });
+  }
+
+  function publishTake(blob, ext, isVideo) {
+    const fname =
+      (currentLoop().name || "loopz").replace(/[^\w\s\-]+/g, "").replace(/\s+/g, "-") +
+      (isVideo ? "-video-take." : "-take.") +
+      ext;
+    if (takeUrl) URL.revokeObjectURL(takeUrl);
+    takeUrl = URL.createObjectURL(blob);
+    if (takeAudio) {
+      takeAudio.hidden = !!isVideo;
+      if (!isVideo) takeAudio.src = takeUrl;
+    }
+    if (takeVideo) {
+      takeVideo.hidden = !isVideo;
+      if (isVideo) {
+        takeVideo.src = takeUrl;
+        takeVideo.load();
+      } else {
+        takeVideo.removeAttribute("src");
+        takeVideo.load();
+      }
+    }
+    downloadBlob(blob, fname);
+  }
+
+  function downloadBlob(blob, fname) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  async function sniffContainer(blob) {
+    try {
+      const buf = new Uint8Array(await blob.slice(0, 16).arrayBuffer());
+      if (buf.length >= 8 && buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) return "mp4";
+      if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return "webm";
+    } catch (_) {}
+    return "";
+  }
+
+  async function finishRecording(mime) {
+    const chunks = recChunks.slice();
+    recChunks = [];
+    const kind = recordKind;
+    cleanupMic();
+    syncSession();
+    if (!chunks.length) {
+      if (recNote) {
+        recNote.hidden = false;
+        recNote.textContent = "Recording was empty.";
+      }
+      return;
+    }
+    const isVideo = kind === "video" || String(mime || "").startsWith("video/");
+    const blob = new Blob(chunks, { type: mime || (isVideo ? "video/webm" : "audio/webm") });
+    if (isVideo) {
+      const sniffed = await sniffContainer(blob);
+      const ext = sniffed === "mp4" || String(mime || "").includes("mp4") ? "mp4" : "webm";
+      const typed = ext === "mp4" ? new Blob([blob], { type: "video/mp4" }) : blob;
+      publishTake(typed, ext, true);
+      if (recNote) {
+        recNote.hidden = false;
+        recNote.textContent =
+          ext === "mp4"
+            ? "MP4 saved — camera plus drums, piano, bass, guitar, and your mic."
+            : "Saved as WebM. This browser cannot record MP4 (iPhone and Safari can).";
+      }
+      return;
+    }
+    if (recNote) {
+      recNote.hidden = false;
+      recNote.textContent = "Making MP3…";
+    }
+    try {
+      if (!ensureCtx()) throw new Error("no audio");
+      const raw = await blob.arrayBuffer();
+      const decoded = await ctx.decodeAudioData(raw.slice(0));
+      const mp3 = encodeMp3(decoded);
+      publishTake(mp3, "mp3", false);
+      if (recNote) recNote.textContent = "MP3 saved — drums, piano, bass, guitar, and your mic.";
+    } catch (e) {
+      const ext = (mime || "").includes("mp4") ? "m4a" : (mime || "").includes("ogg") ? "ogg" : "webm";
+      publishTake(blob, ext, false);
+      if (recNote) recNote.textContent = "Could not make MP3 (" + (e.message || e) + "). Saved the original file.";
+    }
+  }
+
+  async function startRecording(kind) {
+    kind = kind === "video" ? "video" : "audio";
+    if (recording || recordBusy) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Recording needs microphone permission in this browser.");
+      return;
+    }
+    recordBusy = true;
+    recordKind = kind;
+    holdWake();
+    try {
+      if (!ensureCtx()) {
+        alert("Web Audio is not available in this browser.");
+        return;
+      }
+      const audioOpts = {
+        echoCancellation: { ideal: true },
+        noiseSuppression: { ideal: true },
+        autoGainControl: { ideal: true },
+        channelCount: { ideal: 1 },
+      };
+      if (selectedMicId) audioOpts.deviceId = { exact: selectedMicId };
+      const videoOpts = {
+        facingMode: { ideal: "user" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      };
+      if (kind === "video") {
+        try {
+          const both = await getMedia({ video: videoOpts, audio: audioOpts });
+          micStream = both;
+          camStream = both;
+        } catch (_) {
+          camStream = await navigator.mediaDevices.getUserMedia({ video: videoOpts });
+          micStream = await getMedia({ audio: audioOpts });
+        }
+      } else {
+        micStream = await getMedia({ audio: audioOpts });
+        camStream = null;
+      }
+      await refreshMics();
+      const track = micStream.getAudioTracks()[0];
+      if (track && track.getSettings) {
+        const id = track.getSettings().deviceId;
+        if (id && micSel && Array.from(micSel.options).some((o) => o.value === id)) {
+          selectedMicId = id;
+          micSel.value = id;
+          savePrefs();
+        }
+      }
+      micSource = ctx.createMediaStreamSource(micStream);
+      micGain = ctx.createGain();
+      micGain.gain.value = 1.4;
+      recDest = ctx.createMediaStreamDestination();
+      mixBus.connect(recDest);
+      micSource.connect(micGain);
+      micGain.connect(recDest);
+      let recStream = recDest.stream;
+      if (kind === "video") {
+        const videoTrack = (camStream || micStream).getVideoTracks()[0];
+        if (!videoTrack) throw new Error("No camera");
+        recStream = new MediaStream([videoTrack, ...recDest.stream.getAudioTracks()]);
+        showCamPreview(camStream || micStream);
+      }
+      recChunks = [];
+      const mime = pickRecorderMime(kind);
+      const recOpts =
+        kind === "video"
+          ? { audioBitsPerSecond: 192000, videoBitsPerSecond: 2500000 }
+          : { audioBitsPerSecond: 192000 };
+      if (mime) recOpts.mimeType = mime;
+      try {
+        mediaRecorder = new MediaRecorder(recStream, recOpts);
+      } catch (_) {
+        mediaRecorder = new MediaRecorder(recStream, mime ? { mimeType: mime } : {});
+      }
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size) recChunks.push(e.data);
+      };
+      mediaRecorder.onstop = () =>
+        finishRecording(mediaRecorder.mimeType || mime || (kind === "video" ? "video/webm" : "audio/webm"));
+      mediaRecorder.start(200);
+      recording = true;
+      setRecordUi(true);
+      startRecTimer();
+      if (!playing) await togglePlay();
+    } catch (e) {
+      cleanupMic();
+      recording = false;
+      setRecordUi(false);
+      alert(
+        "Record failed: " +
+          (e.message || e) +
+          (kind === "video" ? " — allow the camera and microphone." : " — allow the microphone.")
+      );
+    } finally {
+      recordBusy = false;
+    }
+  }
+
+  function stopRecording() {
+    if (!recording || !mediaRecorder) return;
+    recording = false;
+    setRecordUi(false);
+    if (playing) stop(false);
+    try {
+      if (mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    } catch (_) {
+      finishRecording(recordKind === "video" ? "video/webm" : "audio/webm");
+    }
+  }
+
+  async function toggleRecord(kind) {
+    if (recording) stopRecording();
+    else await startRecording(kind);
+  }
+
   playBtn.onclick = togglePlay;
   tapBtn.onclick = onTap;
   bpmUp.onclick = () => setBpm(bpm + 5);
@@ -1204,6 +1967,59 @@
       applyGains();
       savePrefs();
     };
+  }
+  if (guitarVolEl) {
+    guitarVolEl.oninput = () => {
+      guitarVol = parseFloat(guitarVolEl.value) || 0;
+      if (guitarVolVal) guitarVolVal.textContent = Math.round(guitarVol * 100) + "%";
+      applyGains();
+      savePrefs();
+    };
+  }
+  if (shapeSeg) {
+    shapeSeg.onclick = (e) => {
+      const b = e.target.closest("button");
+      if (!b || !b.dataset.shape) return;
+      shape = b.dataset.shape;
+      playedBeats = 0;
+      paintShape();
+      savePrefs();
+    };
+  }
+  if (shapeEverySel) {
+    shapeEverySel.onchange = () => {
+      shapeEvery = parseInt(shapeEverySel.value, 10) || 4;
+      playedBeats = 0;
+      paintShape();
+      savePrefs();
+    };
+  }
+  if (micSel) {
+    micSel.onchange = () => {
+      selectedMicId = micSel.value || "";
+      savePrefs();
+    };
+  }
+  if (recordBtn) recordBtn.onclick = () => toggleRecord("audio");
+  if (recordVideoBtn) recordVideoBtn.onclick = () => toggleRecord("video");
+  refreshMics();
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+    navigator.mediaDevices.addEventListener("devicechange", refreshMics);
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (ctx && ctx.state === "suspended" && (playing || recording)) ctx.resume().catch(() => {});
+    if (playing || recording) holdWake();
+  });
+  if (navigator.mediaSession) {
+    try {
+      navigator.mediaSession.setActionHandler("play", () => {
+        if (!playing) togglePlay();
+      });
+      navigator.mediaSession.setActionHandler("pause", () => {
+        if (playing) stop(false);
+      });
+    } catch (_) {}
   }
   if (jamOnEl) {
     jamOnEl.onchange = () => {

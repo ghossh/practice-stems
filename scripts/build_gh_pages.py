@@ -86,6 +86,8 @@ STATIC_SHIM = r"""
       }
       const takesWrap = document.getElementById("takesWrap");
       if (takesWrap) takesWrap.hidden = true;
+      const recordRow = document.querySelector(".transport-record");
+      if (recordRow) recordRow.style.display = "none";
       if (recordBtn) recordBtn.hidden = true;
       const demoNote = document.createElement("p");
       demoNote.className = "footer-note";
@@ -102,8 +104,13 @@ STATIC_SHIM = r"""
 def copy_stems() -> Path:
     dest = DOCS / "demo" / DEMO_ID
     dest.mkdir(parents=True, exist_ok=True)
+    names = STEM_ORDER + ["source"]
     if not SRC_JOB.is_dir():
-        raise SystemExit(f"Missing demo song folder: {SRC_JOB}")
+        missing = [name for name in names if not (dest / f"{name}.mp3").is_file()]
+        if missing:
+            raise SystemExit(f"Missing demo song folder: {SRC_JOB}")
+        print(f"  keeping existing stems in {dest}")
+        return dest
     for name in STEM_ORDER + ["source"]:
         src = SRC_JOB / f"{name}.mp3"
         if not src.is_file():
@@ -118,6 +125,9 @@ def copy_assets() -> None:
         shutil.rmtree(out)
     out.mkdir(parents=True)
     shutil.copy2(STATIC / "app.css", out / "app.css")
+    lame = STATIC / "lame.min.js"
+    if lame.is_file():
+        shutil.copy2(lame, out / "lame.min.js")
 
     loopz_js = (STATIC / "loopz.js").read_text(encoding="utf-8")
     loopz_js = loopz_js.replace('"/static/loopz/kit/', '"static/loopz/kit/')
@@ -133,8 +143,35 @@ def copy_assets() -> None:
         shutil.copy2(attr, out / "loopz" / "ATTRIBUTION.md")
 
 
+def existing_boot() -> dict | None:
+    player = DOCS / "player.html"
+    if not player.is_file():
+        return None
+    text = player.read_text(encoding="utf-8")
+    key = "const BOOT = "
+    i = text.find(key)
+    if i < 0:
+        return None
+    start = text.find("{", i)
+    if start < 0:
+        return None
+    try:
+        boot, _ = json.JSONDecoder().raw_decode(text[start:])
+    except json.JSONDecodeError:
+        return None
+    return boot if isinstance(boot, dict) else None
+
+
 def build_boot() -> dict:
-    meta = json.loads((SRC_JOB / "meta.json").read_text(encoding="utf-8"))
+    meta_path = SRC_JOB / "meta.json"
+    if not meta_path.is_file():
+        boot = existing_boot()
+        if not boot:
+            raise SystemExit(f"Missing demo metadata: {meta_path}")
+        boot["static_demo"] = True
+        boot["recordings"] = []
+        return boot
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
     stems = {name: f"demo/{DEMO_ID}/{name}.mp3" for name in STEM_ORDER}
     return {
         "job_id": DEMO_ID,
@@ -170,6 +207,7 @@ def build_boot() -> dict:
 def write_player(boot: dict) -> None:
     html = (STATIC / "player.html").read_text(encoding="utf-8")
     html = html.replace('href="/static/app.css"', 'href="static/app.css"')
+    html = html.replace('src="/static/lame.min.js"', 'src="static/lame.min.js"')
     boot_json = json.dumps(boot).replace("<", "\\u003c")
     html = html.replace("__BOOT_JSON__", boot_json)
     if "init();" not in html:
@@ -182,6 +220,7 @@ def write_loopz() -> None:
     html = (STATIC / "loopz.html").read_text(encoding="utf-8")
     html = html.replace('href="/static/app.css"', 'href="static/app.css"')
     html = html.replace('href="/"', 'href="./index.html"')
+    html = html.replace('src="/static/lame.min.js"', 'src="static/lame.min.js"')
     html = html.replace('src="/static/loopz.js"', 'src="static/loopz.js"')
     (DOCS / "loopz.html").write_text(html, encoding="utf-8")
 
@@ -205,7 +244,7 @@ def write_index() -> None:
       <a class="btn primary brand-loopz" href="loopz.html">Loopz</a>
     </div>
     <div class="hero">
-      <p>Try the stem mixer and Loopz in the browser. Upload, Demucs, HQ pitch/speed, and detection need the full local app.</p>
+      <p>Try the stem mixer and Loopz in the browser. Upload, Demucs, HQ pitch/speed, and saved song takes need the full local app. Loopz can record and download here.</p>
     </div>
 
     <a class="loopz-home-card" href="player.html">
@@ -219,14 +258,14 @@ def write_index() -> None:
     <a class="loopz-home-card" href="loopz.html" style="margin-top: 12px;">
       <div>
         <strong>Loopz</strong>
-        <p>Drum loops, piano + bass jam chords, tempo &amp; metronome. Fully client-side.</p>
+        <p>Drum loops, piano, bass, and clean guitar. Record an MP3 or a camera video with the band. Fully client-side.</p>
       </div>
       <span class="loopz-home-go">Practice →</span>
     </a>
 
     <div class="card" style="margin-top: 18px;">
       <div class="library-head"><h2>Run the full app</h2></div>
-      <p class="section-sub" style="margin-top:0">YouTube / upload → Demucs 6-stem split, HQ Rubber Band, chord &amp; lyric detect, mix download.
+      <p class="section-sub" style="margin-top:0">YouTube / upload → Demucs 6-stem split, HQ Rubber Band, chord detect, mix download, and saved audio or video takes.
         Source: <a href="https://github.com/ghossh/practice-stems" target="_blank" rel="noopener">github.com/ghossh/practice-stems</a></p>
       <pre style="margin:0;white-space:pre-wrap;font-size:13px;opacity:.9">conda activate practice-stems
 python app.py
