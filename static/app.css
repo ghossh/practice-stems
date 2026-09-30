@@ -55,12 +55,25 @@ a:hover { text-decoration: underline; }
   color: var(--muted);
   font-size: 13px;
 }
-.brand-loopz {
+.brand-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.brand-loopz {
   text-decoration: none;
 }
 .brand-loopz:hover {
   text-decoration: none;
+}
+.brand-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.brand-github svg {
+  display: block;
 }
 
 .loopz-home-card {
@@ -1385,7 +1398,7 @@ button.hq-toggle.on {
     width: auto;
     flex: 1 1 140px;
   }
-  .brand-loopz {
+  .brand-actions {
     margin-left: 0;
   }
 
