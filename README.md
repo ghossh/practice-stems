@@ -103,7 +103,7 @@ python3 scripts/build_gh_pages.py
 
 In the repo: **Settings → Pages → Deploy from branch → `/docs`**.
 
-Open `https://<user>.github.io/practice-stems/` — stem demo uses NCS *Fearless pt.II* (see `docs/demo/ATTRIBUTION.md`).
+Open `https://<user>.github.io/practice-stems/` — stem demo uses Brad Sucks *Making Me Nervous* (CC BY-NC-SA 2.5; see `docs/demo/ATTRIBUTION.md`).
 
 ---
 

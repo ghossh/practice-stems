@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a static GitHub Pages demo under docs/ (no FastAPI).
 
-Copies Fearless demo stems + Loopz assets, bakes player BOOT JSON, and
+Copies the demo stems + Loopz assets, bakes player BOOT JSON, and
 rewrites absolute /static paths so the site works at /practice-stems/.
 """
 
@@ -18,13 +18,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 DOCS = ROOT / "docs"
 STATIC = ROOT / "static"
-SRC_JOB = (
-    ROOT
-    / "data"
-    / "play"
-    / "Lost_Sky_-_Fearless_pt_II_feat_Chris_Linton_Trap_NCS_-_Copyr"
-)
-DEMO_ID = "fearless"
+SRC_JOB = ROOT / "data" / "play" / "brad_sucks_making_me_nervous"
+DEMO_ID = "nervous"
 STEM_ORDER = ["vocals", "drums", "bass", "guitar", "piano", "other"]
 
 STATIC_SHIM = r"""
@@ -96,8 +91,8 @@ STATIC_SHIM = r"""
       const demoNote = document.createElement("p");
       demoNote.className = "footer-note";
       demoNote.innerHTML =
-        'Static demo · Track: Lost Sky - Fearless pt.II (feat. Chris Linton) [NCS] · ' +
-        '<a href="https://ncs.io/usage-policy" target="_blank" rel="noopener">NCS usage policy</a> · ' +
+        'Static demo · Track: Brad Sucks — Making Me Nervous · ' +
+        '<a href="https://creativecommons.org/licenses/by-nc-sa/2.5/" target="_blank" rel="noopener">CC BY-NC-SA 2.5</a> · ' +
         'Full app: run <code>python app.py</code> locally.';
       const wrap = document.querySelector(".wrap");
       if (wrap) wrap.appendChild(demoNote);
@@ -247,7 +242,7 @@ def build_boot() -> dict:
     boot = {
         "job_id": DEMO_ID,
         "title": meta.get("title")
-        or "Lost Sky - Fearless pt.II (feat. Chris Linton) [NCS]",
+        or "Brad Sucks — Making Me Nervous",
         "hub_url": "./player.html",
         "player_url": "./player.html",
         "source_url": f"demo/{DEMO_ID}/source.mp3",
@@ -322,7 +317,7 @@ def write_index() -> None:
     <a class="loopz-home-card" href="player.html">
       <div>
         <strong>Stem mixer demo</strong>
-        <p>Lost Sky — Fearless pt.II (feat. Chris Linton) · NCS. Play, mute, solo, volume, presets, chords, metronome.</p>
+        <p>Brad Sucks — Making Me Nervous. Vocals, drums, bass, and guitar. Play, mute, solo, volume, presets, chords, metronome.</p>
       </div>
       <span class="loopz-home-go">Open mixer →</span>
     </a>
@@ -345,9 +340,8 @@ python app.py
     </div>
 
     <p class="footer-note">
-      Music: Lost Sky - Fearless pt.II (feat. Chris Linton) [NCS Release] ·
-      provided by <a href="https://ncs.io" target="_blank" rel="noopener">NoCopyrightSounds</a> ·
-      <a href="https://ncs.io/usage-policy" target="_blank" rel="noopener">Usage policy</a> ·
+      Music: Brad Sucks — Making Me Nervous ·
+      <a href="https://creativecommons.org/licenses/by-nc-sa/2.5/" target="_blank" rel="noopener">CC BY-NC-SA 2.5</a> ·
       see <a href="demo/ATTRIBUTION.md">demo/ATTRIBUTION.md</a>
     </p>
   </div>
@@ -364,17 +358,22 @@ def write_attribution() -> None:
 
 ## Stem mixer sample
 
-- **Track:** Lost Sky - Fearless pt.II (feat. Chris Linton) [NCS Release]
-- **Provided by:** [NoCopyrightSounds (NCS)](https://ncs.io)
-- **Listen / download:** check the official NCS upload for this release
-- **Usage:** Follow the [NCS Usage Policy](https://ncs.io/usage-policy). This static demo hosts stems for an open-source practice UI; NCS’s free licence is primarily for YouTube/Twitch UGC with credit — review their terms for your use case.
+- **Track:** Making Me Nervous
+- **Artist:** Brad Sucks
+- **Album:** I Don't Know What I'm Doing (2003)
+- **License:** [CC BY-NC-SA 2.5](https://creativecommons.org/licenses/by-nc-sa/2.5/)
+- **Source file:** [Internet Archive `jamendo-003798`](https://archive.org/details/jamendo-003798) (Jamendo album 3798). Copyright line in the file: 2007 Brad Sucks, licensed under that CC deed.
+- **Changes:** Vocals, drums, bass, guitar, piano, and other were split from the mix with Demucs (`htdemucs_6s`) for this practice demo. Those stems are a derivative and stay under the same license.
+
+Non-commercial use only. Attribute Brad Sucks, link the license, and share adaptations under CC BY-NC-SA 2.5.
 
 Suggested credit text:
 
 ```
-Track: Lost Sky - Fearless pt.II (feat. Chris Linton) [NCS Release]
-Music provided by NoCopyrightSounds.
-Free Download / Stream: http://ncs.io
+Making Me Nervous by Brad Sucks
+Licensed under CC BY-NC-SA 2.5
+https://creativecommons.org/licenses/by-nc-sa/2.5/
+Stems separated with Demucs for the Practice Stems demo (same license).
 ```
 
 ## Loopz kit
